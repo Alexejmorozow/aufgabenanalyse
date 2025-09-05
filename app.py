@@ -11,11 +11,11 @@ TYP_FARBEN = {
 # --- Funktion für animierte Progress Bars ---
 def animated_progress(value, max_value, color, text, speed=0.02):
     placeholder = st.empty()
-    for i in range(1, value+1):
-        percent = i / max_value
+    max_value = max_value if max_value > 0 else 1
+    for i in range(1, value + 1):
+        percent = min(i / max_value, 1.0)  # nie > 1.0
         placeholder.progress(percent, text=f"{text}: {i}")
         time.sleep(speed)
-    # Farbliche Anzeige nach Animation
     st.markdown(f"<span style='color:{color}; font-weight:bold'>{text}: {value}</span>", unsafe_allow_html=True)
 
 # --- Funktion für Typ-Boxen ---
@@ -64,7 +64,7 @@ def aufgabenanalyse():
     st.write("Bitte beantworte die folgenden Fragen auf einer Skala von 1–7:")
     st.caption("1 = trifft überhaupt nicht zu, 4 = teils zutreffend, 7 = trifft voll zu")
 
-    SCHWELLENWERT_HYBRID = 6  # Unterschied, ab dem wir Hybrid annehmen
+    SCHWELLENWERT_HYBRID = 6
 
     fragen = [
         {"text": "Je mehr Mitglieder aktiv mitwirken, desto besser – auch kleine Beiträge summieren sich zu einem großen Ergebnis.", "typ": "additiv"},
@@ -100,7 +100,7 @@ def aufgabenanalyse():
         submitted = st.form_submit_button("Analyse starten")
 
     if submitted:
-        # --- FUN FEATURE: KEINE AUFGABE ---
+        # --- Fun Feature: keine Aufgabe ---
         durchschnitt = sum([antwort for _, antwort in antworten]) / len(antworten)
         if durchschnitt < 2.0:
             st.warning("🎭 Ergebnis: Keine Aufgabe erkannt")
@@ -110,7 +110,7 @@ def aufgabenanalyse():
             """)
             return
 
-        # --- PUNKTE SUMMIEREN ---
+        # --- Punkte summieren ---
         for typ, antwort in antworten:
             punkte[typ] += antwort
 
@@ -123,7 +123,7 @@ def aufgabenanalyse():
 
         st.success("✅ Analyse abgeschlossen!")
 
-        # --- ERGEBNISSE ANIMIERT ---
+        # --- Ergebnisse animiert ---
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("📊 Punktestände")
@@ -137,11 +137,11 @@ def aufgabenanalyse():
         st.divider()
         st.subheader("🎯 Empfehlung")
 
-        # --- HYBRID-LOGIK ---
+        # --- Hybrid-Logik ---
         if max_punkte - zweit_punkte <= SCHWELLENWERT_HYBRID:
             if {"disjunktiv", "konjunktiv"} == {max_typ, zweit_typ}:
                 typ_name = "Hybrid Disjunktiv + Konjunktiv 🔥⚡"
-                color = "#E63946"  # Rot-Gelb Mix
+                color = "#E63946"
                 bericht = """
 **Um was für eine Aufgabe handelt es sich?**  
 Eine Mischung aus Disjunktiv und Konjunktiv: Spitzenleistung und schwächstes Glied beeinflussen den Erfolg.
@@ -157,7 +157,7 @@ Eine Mischung aus Disjunktiv und Konjunktiv: Spitzenleistung und schwächstes Gl
 """
             elif {"disjunktiv", "additiv"} == {max_typ, zweit_typ}:
                 typ_name = "Hybrid Disjunktiv + Additiv 🔥🌱"
-                color = "#E63946"  # Rot-Grün Mix
+                color = "#E63946"
                 bericht = """
 **Um was für eine Aufgabe handelt es sich?**  
 Erfolg hängt von der besten Leistung und von der Summe aller Beiträge ab.
@@ -173,7 +173,7 @@ Erfolg hängt von der besten Leistung und von der Summe aller Beiträge ab.
 """
             elif {"konjunktiv", "additiv"} == {max_typ, zweit_typ}:
                 typ_name = "Hybrid Konjunktiv + Additiv ⚡🌱"
-                color = "#F1FA3C"  # Gelb-Grün Mix
+                color = "#F1FA3C"
                 bericht = """
 **Um was für eine Aufgabe handelt es sich?**  
 Der Erfolg hängt vom schwächsten Mitglied und von der Summe aller Beiträge ab.
@@ -189,7 +189,7 @@ Der Erfolg hängt vom schwächsten Mitglied und von der Summe aller Beiträge ab
 """
             else:
                 typ_name = "Triple-Hybrid 🔥⚡🌱"
-                color = "#FF8800"  # Mix
+                color = "#FF8800"
                 bericht = """
 **Um was für eine Aufgabe handelt es sich?**  
 Extrem komplex: Beste Leistung, schwächstes Glied und Summe aller Beiträge beeinflussen den Erfolg.
