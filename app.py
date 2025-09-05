@@ -56,7 +56,19 @@ def aufgabenanalyse():
     mode = "dark" if dark_mode else "light"
     colors = FARBEN[mode]
 
-    st.markdown(f"<div style='background-color:{colors['background']}; color:{colors['text']}; padding:10px'>", unsafe_allow_html=True)
+    # --- Globalen Dark Mode via CSS ---
+    st.markdown(f"""
+    <style>
+    .stApp {{
+        background-color: {colors['background']};
+        color: {colors['text']};
+    }}
+    .css-1d391kg, .css-1d391kg * {{
+        color: {colors['text']} !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
     st.title("Willkommen zum Aufgaben-Entscheidungshelfer!")
 
     st.write("""
@@ -143,11 +155,11 @@ def aufgabenanalyse():
         with col1:
             st.subheader("📊 Punktestände")
             for typ, wert in punkte.items():
-                animated_progress(value=wert, max_value=7, color=FARBEN[mode][typ], text=f"{TYP_EMOJI[typ]} {typ.capitalize()}")
+                animated_progress(value=wert, max_value=7, color=colors[typ], text=f"{TYP_EMOJI[typ]} {typ.capitalize()}")
         with col2:
             st.subheader("📈 Prozentuale Verteilung")
             for typ, prozent in prozentuale_verteilung.items():
-                animated_progress(value=int(prozent), max_value=100, color=FARBEN[mode][typ], text=f"{TYP_EMOJI[typ]} {typ.capitalize()} %", speed=0.01)
+                animated_progress(value=int(prozent), max_value=100, color=colors[typ], text=f"{TYP_EMOJI[typ]} {typ.capitalize()} %", speed=0.01)
 
         st.divider()
         st.subheader("🎯 Empfehlung")
@@ -156,7 +168,7 @@ def aufgabenanalyse():
         bericht = ""
         for typ in hybrid_typen:
             if typ == "disjunktiv":
-                bericht += """
+                bericht += f"""
 **Um was für eine Aufgabe handelt es sich?**  
 Disjunktiv ⭐: Erfolg hängt von der besten Leistung im Team ab. Nur die stärksten Mitglieder zählen.  
 
@@ -171,7 +183,7 @@ Disjunktiv ⭐: Erfolg hängt von der besten Leistung im Team ab. Nur die stärk
 - Entscheidungen eher autokratisch
 """
             elif typ == "konjunktiv":
-                bericht += """
+                bericht += f"""
 **Um was für eine Aufgabe handelt es sich?**  
 Konjunktiv ⛓️: Erfolg hängt vom schwächsten Glied ab. Die Kette ist nur so stark wie ihr schwächstes Glied.  
 
@@ -185,7 +197,7 @@ Konjunktiv ⛓️: Erfolg hängt vom schwächsten Glied ab. Die Kette ist nur so
 - Entscheidungen demokratisch  
 """
             elif typ == "additiv":
-                bericht += """
+                bericht += f"""
 **Um was für eine Aufgabe handelt es sich?**  
 Additiv ➕: Jeder Beitrag zählt, die Summe entscheidet.  
 
@@ -199,8 +211,7 @@ Additiv ➕: Jeder Beitrag zählt, die Summe entscheidet.
 - Fortschritte sichtbar machen  
 - Motivation hochhalten
 """
-        typ_box(typ_name, bericht, FARBEN[mode]["box"])
-    st.markdown("</div>", unsafe_allow_html=True)
+        typ_box(typ_name, bericht, colors["box"])
 
 if __name__ == "__main__":
     aufgabenanalyse()
