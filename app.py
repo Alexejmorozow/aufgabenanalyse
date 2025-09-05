@@ -69,6 +69,7 @@ def aufgabenanalyse():
     </style>
     """, unsafe_allow_html=True)
 
+    # --- Einleitung ---
     st.title("Willkommen zum Aufgaben-Entscheidungshelfer!")
 
     st.write("""
@@ -99,36 +100,38 @@ def aufgabenanalyse():
     st.divider()
 
     st.title("🎯 Aufgaben-Analyse")
-    st.caption("1 = trifft überhaupt nicht zu, 4 = teils zutreffend, 7 = trifft voll zu")
+    st.markdown(f"<span style='color:{colors['text']};'>1 = trifft überhaupt nicht zu, 4 = teils zutreffend, 7 = trifft voll zu</span>", unsafe_allow_html=True)
 
     SCHWELLENWERT_HYBRID = 6
 
     fragen = [
-        {"text": "Je mehr Mitglieder aktiv mitwirken, desto besser – auch kleine Beiträge summieren sich zu einem grossen Ergebnis.", "typ": "additiv"},
+        {"text": "Je mehr Mitglieder aktiv mitwirken, desto besser – auch kleine Beiträge summieren sich zu einem großen Ergebnis.", "typ": "additiv"},
         {"text": "Wenn auch nur eine Person ihre Aufgabe nicht erfüllt, ist das gesamte Projekt gefährdet.", "typ": "konjunktiv"},
         {"text": "Eine einzelne Spitzenidee oder herausragende Leistung kann den gesamten Projekterfolg sicherstellen.", "typ": "disjunktiv"},
         {"text": "Die Zusammenarbeit scheitert, wenn ein einzelnes Mitglied nicht die nötige Qualität liefert.", "typ": "konjunktiv"},
         {"text": "Erfolg entsteht vor allem durch die Summe vieler Einzelbeiträge, nicht durch einzelne Spitzenleistungen.", "typ": "additiv"},
         {"text": "Die Leistung der besten Person bestimmt weitgehend, ob das Team erfolgreich ist, unabhängig von den anderen.", "typ": "disjunktiv"},
         {"text": "Fehler oder Ausfälle einzelner wirken sich sofort und stark auf den Gesamterfolg aus.", "typ": "konjunktiv"},
-        {"text": "Wenn alle gleichmässig mitwirken, steigt die Wahrscheinlichkeit für einen erfolgreichen Abschluss deutlich.", "typ": "disjunktiv"},
-        {"text": "Die Leistung des schwächsten Mitglieds bestimmt massgeblich, ob das Team sein Ziel erreicht.", "typ": "konjunktiv"},
+        {"text": "Wenn alle gleichmäßig mitwirken, steigt die Wahrscheinlichkeit für einen erfolgreichen Abschluss deutlich.", "typ": "disjunktiv"},
+        {"text": "Die Leistung des schwächsten Mitglieds bestimmt maßgeblich, ob das Team sein Ziel erreicht.", "typ": "konjunktiv"},
         {"text": "Jeder Beitrag trägt zum Gesamterfolg bei, aber kein einzelner Ausfall bringt alles zum Scheitern.", "typ": "additiv"},
-        {"text": "Auch kleine und regelmässige Beiträge aller Beteiligten können zusammen zu einem sehr starken Gesamtergebnis führen.", "typ": "additiv"},
+        {"text": "Auch kleine und regelmäßige Beiträge aller Beteiligten können zusammen zu einem sehr starken Gesamtergebnis führen.", "typ": "additiv"},
         {"text": "Für den Erfolg reicht es, wenn eine Person die Aufgabe vollständig meistert – andere Beiträge sind nicht entscheidend.", "typ": "disjunktiv"},
     ]
 
     punkte = {"disjunktiv": 0, "konjunktiv": 0, "additiv": 0}
 
+    # --- Fragenformular mit lesbarem Text ---
     with st.form("fragen_form"):
         antworten = []
         for i, frage in enumerate(fragen, start=1):
+            st.markdown(f"<span style='color:{colors['text']}; font-weight:bold'>{i}. {frage['text']}</span>", unsafe_allow_html=True)
             antwort = st.slider(
-                f"{i}. {frage['text']}",
+                "",  # Label leer, Text über Markdown
                 min_value=1,
                 max_value=7,
                 value=4,
-                help="1 = trifft nicht zu, 7 = trifft voll zu"
+                key=f"slider_{i}"
             )
             antworten.append((frage['typ'], antwort))
         submitted = st.form_submit_button("Analyse starten")
@@ -194,7 +197,7 @@ Konjunktiv ⛓️: Erfolg hängt vom schwächsten Glied ab. Die Kette ist nur so
 **Strategie & Vorgehensweise:**  
 - Unterstützung für schwache Mitglieder  
 - Intensive Zusammenarbeit, Aufgaben fair verteilen  
-- Entscheidungen demokratisch  
+- Entscheidungen demokratisch
 """
             elif typ == "additiv":
                 bericht += f"""
@@ -207,7 +210,7 @@ Additiv ➕: Jeder Beitrag zählt, die Summe entscheidet.
 
 **Strategie & Vorgehensweise:**  
 - Alle aktiv einbeziehen  
-- Arbeit gleichmässig verteilen  
+- Arbeit gleichmäßig verteilen  
 - Fortschritte sichtbar machen  
 - Motivation hochhalten
 """
