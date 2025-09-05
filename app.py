@@ -117,7 +117,6 @@ def aufgabenanalyse():
 
         # --- HYBRID-LOGIK ---
         if max_punkte - zweit_punkte <= SCHWELLENWERT_HYBRID:
-            # Bestimme Hybrid-Typ
             if {"disjunktiv", "konjunktiv"} == {max_typ, zweit_typ}:
                 typ = "Hybrid Disjunktiv + Konjunktiv"
                 bericht = """
@@ -181,4 +180,73 @@ Extrem komplex: Beste Leistung, schwächstes Glied und Summe aller Beiträge bee
 **Was bezeichnet diese Aufgabe?**  
 Universell komplex: Erfolg nur durch Spitzenleistung, Vermeidung von Engpässen und Teambeiträge.
 
-**Strateg
+**Strategien:**  
+- Spitzenkräfte identifizieren, fördern und entlasten  
+- Schwache Mitglieder gezielt trainieren und unterstützen  
+- Breite Beteiligung aller Teammitglieder sicherstellen  
+- Klare Rollen, Risikomanagement, regelmäßige Reviews  
+- Mischung aus autokratischen Kernentscheidungen und demokratischer Abstimmung für Teamaktivitäten
+
+**Wer soll entscheiden?**  
+- Hybrider Ansatz: Autokratisch bei Kernentscheidungen, demokratisch bei Teamaktivitäten
+"""
+        else:
+            # --- KLARE TYPEN ---
+            typ = max_typ.capitalize()
+            if max_typ == "disjunktiv":
+                bericht = """
+**Um was für eine Aufgabe handelt es sich?**  
+Disjunktive Aufgabe: Der Erfolg hängt stark von der besten Leistung im Team ab.
+
+**Was bezeichnet diese Aufgabe?**  
+Eine einzelne Spitzenleistung kann den Gesamterfolg sicherstellen, andere Beiträge sind weniger entscheidend.
+
+**Strategien:**  
+- Spitzenkräfte erkennen und gezielt fördern  
+- Freiraum für Kreativität geben  
+- Teammitglieder als Unterstützung einsetzen  
+- Regelmäßige Kontrolle der Kernleistung
+
+**Wer soll entscheiden?**  
+- Autokratisch oder auf Experten fokussiert
+"""
+            elif max_typ == "konjunktiv":
+                bericht = """
+**Um was für eine Aufgabe handelt es sich?**  
+Konjunktive Aufgabe: Der Erfolg hängt vom schwächsten Mitglied ab.
+
+**Was bezeichnet diese Aufgabe?**  
+Alle müssen ihre Aufgabe erfüllen, sonst ist das Ergebnis gefährdet.
+
+**Strategien:**  
+- Schwächste Mitglieder trainieren und unterstützen  
+- Intensive Zusammenarbeit und klare Kommunikation  
+- Aufgaben fair verteilen und Engpässe vermeiden  
+- Risikomanagement implementieren
+
+**Wer soll entscheiden?**  
+- Demokratisch, Teamkonsens ist wichtig
+"""
+            elif max_typ == "additiv":
+                bericht = """
+**Um was für eine Aufgabe handelt es sich?**  
+Additive Aufgabe: Jeder Beitrag zählt, die Summe aller Leistungen bestimmt den Erfolg.
+
+**Was bezeichnet diese Aufgabe?**  
+Keine einzelne Person kann den Erfolg allein sichern oder gefährden.
+
+**Strategien:**  
+- Breite Beteiligung fördern  
+- Aufgaben gleichmäßig verteilen  
+- Fortschritte sichtbar machen  
+- Motivation aller Teammitglieder hochhalten
+
+**Wer soll entscheiden?**  
+- Demokratisch, kollektiver Input ist sinnvoll
+"""
+        st.markdown(f"### {typ}")
+        st.write(bericht)
+
+# --- APP STARTEN ---
+if __name__ == "__main__":
+    aufgabenanalyse()
