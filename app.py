@@ -1,20 +1,34 @@
 import streamlit as st
 import time
 
-# Farben pro Typ
-TYP_FARBEN = {
-    "disjunktiv": "#E63946",
-    "konjunktiv": "#F1FA3C",
-    "additiv": "#2A9D8F"
-}
-
-# Emojis pro Typ
+# --- Emojis pro Typ ---
 TYP_EMOJI = {
     "disjunktiv": "⭐",
     "konjunktiv": "⛓️",
     "additiv": "➕"
 }
 
+# --- Farbdefinitionen für Light/Dark Mode ---
+FARBEN = {
+    "light": {
+        "disjunktiv": "#E63946",
+        "konjunktiv": "#F1FA3C",
+        "additiv": "#2A9D8F",
+        "background": "#FFFFFF",
+        "text": "#000000",
+        "box": "#f9f9f9"
+    },
+    "dark": {
+        "disjunktiv": "#FF6B6B",
+        "konjunktiv": "#FFD93D",
+        "additiv": "#4ECDC4",
+        "background": "#121212",
+        "text": "#FFFFFF",
+        "box": "#1E1E1E"
+    }
+}
+
+# --- Progress Bar Funktion ---
 def animated_progress(value, max_value, color, text, speed=0.02):
     placeholder = st.empty()
     max_value = max(max_value, 1)
@@ -24,16 +38,25 @@ def animated_progress(value, max_value, color, text, speed=0.02):
         time.sleep(speed)
     st.markdown(f"<span style='color:{color}; font-weight:bold'>{text}: {value}</span>", unsafe_allow_html=True)
 
-def typ_box(title, bericht, color):
+# --- Typ Box Funktion ---
+def typ_box(title, bericht, box_color):
     st.markdown(f"""
-    <div style='border:2px solid {color}; padding:15px; border-radius:10px; background-color:#f9f9f9; margin-bottom:15px'>
-    <h3 style='color:{color}'>{title}</h3>
+    <div style='border:2px solid #888888; padding:15px; border-radius:10px; background-color:{box_color}; margin-bottom:15px'>
+    <h3>{title}</h3>
     {bericht}
     </div>
     """, unsafe_allow_html=True)
 
+# --- Hauptfunktion ---
 def aufgabenanalyse():
     st.set_page_config(page_title="Aufgaben-Entscheidungshelfer", layout="wide")
+
+    # --- Dark Mode Toggle ---
+    dark_mode = st.checkbox("🌙 Dark Mode aktivieren", value=False)
+    mode = "dark" if dark_mode else "light"
+    colors = FARBEN[mode]
+
+    st.markdown(f"<div style='background-color:{colors['background']}; color:{colors['text']}; padding:10px'>", unsafe_allow_html=True)
     st.title("Willkommen zum Aufgaben-Entscheidungshelfer!")
 
     st.write("""
@@ -69,17 +92,17 @@ def aufgabenanalyse():
     SCHWELLENWERT_HYBRID = 6
 
     fragen = [
-        {"text": "Je mehr Mitglieder aktiv mitwirken, desto besser – auch kleine Beiträge summieren sich zu einem grossen Ergebnis.", "typ": "additiv"},
+        {"text": "Je mehr Mitglieder aktiv mitwirken, desto besser – auch kleine Beiträge summieren sich zu einem großen Ergebnis.", "typ": "additiv"},
         {"text": "Wenn auch nur eine Person ihre Aufgabe nicht erfüllt, ist das gesamte Projekt gefährdet.", "typ": "konjunktiv"},
         {"text": "Eine einzelne Spitzenidee oder herausragende Leistung kann den gesamten Projekterfolg sicherstellen.", "typ": "disjunktiv"},
         {"text": "Die Zusammenarbeit scheitert, wenn ein einzelnes Mitglied nicht die nötige Qualität liefert.", "typ": "konjunktiv"},
         {"text": "Erfolg entsteht vor allem durch die Summe vieler Einzelbeiträge, nicht durch einzelne Spitzenleistungen.", "typ": "additiv"},
         {"text": "Die Leistung der besten Person bestimmt weitgehend, ob das Team erfolgreich ist, unabhängig von den anderen.", "typ": "disjunktiv"},
         {"text": "Fehler oder Ausfälle einzelner wirken sich sofort und stark auf den Gesamterfolg aus.", "typ": "konjunktiv"},
-        {"text": "Wenn alle gleichmässig mitwirken, steigt die Wahrscheinlichkeit für einen erfolgreichen Abschluss deutlich.", "typ": "disjunktiv"},
-        {"text": "Die Leistung des schwächsten Mitglieds bestimmt massgeblich, ob das Team sein Ziel erreicht.", "typ": "konjunktiv"},
+        {"text": "Wenn alle gleichmäßig mitwirken, steigt die Wahrscheinlichkeit für einen erfolgreichen Abschluss deutlich.", "typ": "disjunktiv"},
+        {"text": "Die Leistung des schwächsten Mitglieds bestimmt maßgeblich, ob das Team sein Ziel erreicht.", "typ": "konjunktiv"},
         {"text": "Jeder Beitrag trägt zum Gesamterfolg bei, aber kein einzelner Ausfall bringt alles zum Scheitern.", "typ": "additiv"},
-        {"text": "Auch kleine und regelmässige Beiträge aller Beteiligten können zusammen zu einem sehr starken Gesamtergebnis führen.", "typ": "additiv"},
+        {"text": "Auch kleine und regelmäßige Beiträge aller Beteiligten können zusammen zu einem sehr starken Gesamtergebnis führen.", "typ": "additiv"},
         {"text": "Für den Erfolg reicht es, wenn eine Person die Aufgabe vollständig meistert – andere Beiträge sind nicht entscheidend.", "typ": "disjunktiv"},
     ]
 
@@ -120,11 +143,11 @@ def aufgabenanalyse():
         with col1:
             st.subheader("📊 Punktestände")
             for typ, wert in punkte.items():
-                animated_progress(value=wert, max_value=7, color=TYP_FARBEN[typ], text=f"{TYP_EMOJI[typ]} {typ.capitalize()}")
+                animated_progress(value=wert, max_value=7, color=FARBEN[mode][typ], text=f"{TYP_EMOJI[typ]} {typ.capitalize()}")
         with col2:
             st.subheader("📈 Prozentuale Verteilung")
             for typ, prozent in prozentuale_verteilung.items():
-                animated_progress(value=int(prozent), max_value=100, color=TYP_FARBEN[typ], text=f"{TYP_EMOJI[typ]} {typ.capitalize()} %", speed=0.01)
+                animated_progress(value=int(prozent), max_value=100, color=FARBEN[mode][typ], text=f"{TYP_EMOJI[typ]} {typ.capitalize()} %", speed=0.01)
 
         st.divider()
         st.subheader("🎯 Empfehlung")
@@ -135,52 +158,49 @@ def aufgabenanalyse():
             if typ == "disjunktiv":
                 bericht += """
 **Um was für eine Aufgabe handelt es sich?**  
-Disjunktiv ⭐: Der Erfolg hängt stark von der besten Leistung im Team ab. Nur die stärksten Mitglieder zählen.  
+Disjunktiv ⭐: Erfolg hängt von der besten Leistung im Team ab. Nur die stärksten Mitglieder zählen.  
 
-**Typische Stolpersteine:**  
-- Schwache Mitglieder könnten vernachlässigt werden  
+**Stolpersteine:**  
+- Schwache Mitglieder vernachlässigt  
 - Überlastung der Spitzenkräfte  
-- Mangelnde Motivation der übrigen Teammitglieder
 
 **Strategie & Vorgehensweise:**  
-- Stärken der besten gezielt fördern  
-- Kreativität zulassen, andere als Unterstützung einsetzen  
-- Kontrolle der Kernleistungen regelmässig durchführen  
-- Entscheidungen eher autokratisch / expertenbasiert treffen
+- Stärken gezielt fördern  
+- Kreativität zulassen, andere unterstützen  
+- Kontrolle der Kernleistungen  
+- Entscheidungen eher autokratisch
 """
             elif typ == "konjunktiv":
                 bericht += """
 **Um was für eine Aufgabe handelt es sich?**  
-Konjunktiv ⛓️: Der Erfolg hängt vom schwächsten Mitglied ab. Die „Kette ist nur so stark wie ihr schwächstes Glied“.  
+Konjunktiv ⛓️: Erfolg hängt vom schwächsten Glied ab. Die Kette ist nur so stark wie ihr schwächstes Glied.  
 
-**Typische Stolpersteine:**  
-- Schwache Glieder können das Projekt gefährden  
-- Fehlende Kooperation führt sofort zu Problemen  
-- Risiken durch ungleich verteilte Aufgaben
+**Stolpersteine:**  
+- Schwache Mitglieder gefährden den Erfolg  
+- Fehlende Kooperation ist kritisch  
 
 **Strategie & Vorgehensweise:**  
-- Schwache Mitglieder trainieren und unterstützen  
-- Intensive Zusammenarbeit und Kommunikation  
-- Aufgaben fair verteilen, Engpässe vermeiden  
-- Entscheidungen demokratisch, Teamkonsens einholen
+- Unterstützung für schwache Mitglieder  
+- Intensive Zusammenarbeit, Aufgaben fair verteilen  
+- Entscheidungen demokratisch  
 """
             elif typ == "additiv":
                 bericht += """
 **Um was für eine Aufgabe handelt es sich?**  
-Additiv ➕: Jeder Beitrag zählt. Die Summe aller Leistungen entscheidet über den Erfolg.  
+Additiv ➕: Jeder Beitrag zählt, die Summe entscheidet.  
 
-**Typische Stolpersteine:**  
+**Stolpersteine:**  
 - Einzelne Beiträge werden unterschätzt  
 - Motivation könnte schwanken  
-- Fortschritte sind schwer sichtbar, wenn Beteiligung ungleichmässig
 
 **Strategie & Vorgehensweise:**  
-- Alle Mitglieder aktiv einbeziehen  
-- Arbeit gleichmässig verteilen  
-- Fortschritte transparent machen  
-- Motivation hochhalten, Entscheidungen demokratisch treffen
+- Alle aktiv einbeziehen  
+- Arbeit gleichmäßig verteilen  
+- Fortschritte sichtbar machen  
+- Motivation hochhalten
 """
-        typ_box(typ_name, bericht, "#2A9D8F")  # neutrale Farbe für Hybrid
+        typ_box(typ_name, bericht, FARBEN[mode]["box"])
+    st.markdown("</div>", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     aufgabenanalyse()
