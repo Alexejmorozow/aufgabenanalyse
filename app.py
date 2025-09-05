@@ -1,6 +1,39 @@
 import streamlit as st
 
 def aufgabenanalyse():
+    # --- EINLEITUNGSTEXT ---
+    st.title("Willkommen zum Aufgaben-Entscheidungshelfer!")
+    
+    st.write("""
+    In Teams, Projekten oder Organisationen gibt es unterschiedliche Arten von Aufgaben.
+    Je nachdem, wie der Erfolg zustande kommt, braucht es andere Strategien zur Entscheidungsfindung und Zusammenarbeit.
+
+    **Diese App hilft dir herauszufinden, welche Art von Aufgabe du gerade vor dir hast.**
+    """)
+    
+    with st.expander("ℹ️ So funktioniert es:"):
+        st.write("""
+        - Du beantwortest 9 kurze Fragen zu deiner Aufgabe auf einer Skala von 1 bis 7 (1 = trifft überhaupt nicht zu, 7 = trifft voll zu).
+        - Die App analysiert deine Antworten und ordnet deine Aufgabe einem oder mehreren Aufgabentypen zu:
+            - **Disjunktiv**: Erfolg hängt von der besten Leistung im Team ab.
+            - **Konjunktiv**: Erfolg hängt vom schwächsten Glied ab – alle müssen gut zusammenarbeiten.
+            - **Additiv**: Jeder Beitrag zählt, die Summe aller Leistungen bestimmt den Erfolg.
+        - Du erhältst eine Empfehlung, wie du Entscheidungen treffen und dein Team optimal organisieren kannst.
+        """)
+    
+    with st.expander("💡 Nutzen:"):
+        st.write("""
+        - Klarheit darüber, wie dein Team zusammenarbeiten sollte.
+        - Hilfe, die richtige Entscheidungsstrategie zu wählen.
+        - Besseres Verständnis, wo Stärken und Schwächen liegen.
+        """)
+    
+    st.info("Hinweis: Beantworte die Fragen ehrlich und spontan – es gibt keine richtigen oder falschen Antworten.")
+    
+    st.divider()
+    # --- ENDE EINLEITUNGSTEXT ---
+    
+    # --- FRAGENTEIL (originaler Code) ---
     st.title("🎯 Aufgaben-Entscheidungshelfer")
     st.write("Bitte beantworte die folgenden Fragen auf einer Skala von 1–7:")
     st.caption("1 = trifft überhaupt nicht zu, 4 = teils zutreffend, 7 = trifft voll zu")
