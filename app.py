@@ -40,17 +40,17 @@ def aufgabenanalyse():
     SCHWELLENWERT_HYBRID = 6  # Unterschied, ab dem wir von Hybrid sprechen
 
     fragen = [
-        {"text": "Je mehr Mitglieder aktiv mitwirken, desto besser – auch kleine Beiträge summieren sich zu einem großen Ergebnis.", "typ": "additiv"},
+        {"text": "Je mehr Mitglieder aktiv mitwirken, desto besser – auch kleine Beiträge summieren sich zu einem grossen Ergebnis.", "typ": "additiv"},
         {"text": "Wenn auch nur eine Person ihre Aufgabe nicht erfüllt, ist das gesamte Projekt gefährdet.", "typ": "konjunktiv"},
         {"text": "Eine einzelne Spitzenidee oder herausragende Leistung kann den gesamten Projekterfolg sicherstellen.", "typ": "disjunktiv"},
         {"text": "Die Zusammenarbeit scheitert, wenn ein einzelnes Mitglied nicht die nötige Qualität liefert.", "typ": "konjunktiv"},
         {"text": "Erfolg entsteht vor allem durch die Summe vieler Einzelbeiträge, nicht durch einzelne Spitzenleistungen.", "typ": "additiv"},
         {"text": "Die Leistung der besten Person bestimmt weitgehend, ob das Team erfolgreich ist, unabhängig von den anderen.", "typ": "disjunktiv"},
         {"text": "Fehler oder Ausfälle einzelner wirken sich sofort und stark auf den Gesamterfolg aus.", "typ": "konjunktiv"},
-        {"text": "Wenn alle gleichmäßig mitwirken, steigt die Wahrscheinlichkeit für einen erfolgreichen Abschluss deutlich.", "typ": "disjunktiv"},
-        {"text": "Die Leistung des schwächsten Mitglieds bestimmt maßgeblich, ob das Team sein Ziel erreicht.", "typ": "konjunktiv"},
+        {"text": "Wenn alle gleichmässig mitwirken, steigt die Wahrscheinlichkeit für einen erfolgreichen Abschluss deutlich.", "typ": "disjunktiv"},
+        {"text": "Die Leistung des schwächsten Mitglieds bestimmt massgeblich, ob das Team sein Ziel erreicht.", "typ": "konjunktiv"},
         {"text": "Jeder Beitrag trägt zum Gesamterfolg bei, aber kein einzelner Ausfall bringt alles zum Scheitern.", "typ": "additiv"},
-        {"text": "Auch kleine und regelmäßige Beiträge aller Beteiligten können zusammen zu einem sehr starken Gesamtergebnis führen.", "typ": "additiv"},
+        {"text": "Auch kleine und regelmässige Beiträge aller Beteiligten können zusammen zu einem sehr starken Gesamtergebnis führen.", "typ": "additiv"},
         {"text": "Für den Erfolg reicht es, wenn eine Person die Aufgabe vollständig meistert – andere Beiträge sind nicht entscheidend.", "typ": "disjunktiv"},
     ]
 
@@ -82,7 +82,7 @@ def aufgabenanalyse():
             Vielleicht läuft bei dir einfach alles so perfekt, dass es nichts zu analysieren gibt. 😌  
 
             💡 Tipp: Wenn das nicht stimmt, probiere es nochmal mit ehrlichen Antworten.  
-            Und falls doch: Gönn dir einen Kaffee und genieße den Leerlauf. ☕
+            Und falls doch: Gönn dir einen Kaffee und geniesse den Leerlauf. ☕
             """)
             return
 
@@ -147,7 +147,7 @@ Spitzenkraft treibt das Projekt voran, alle Beiträge erhöhen die Qualität.
 **Strategien:**  
 - Spitzenkräfte fördern  
 - Alle zu kleinen Beiträgen motivieren  
-- Regelmäßiges Monitoring  
+- Regelmässiges Monitoring  
 - Kombination aus Einzel- und Team-Feedback
 
 **Wer soll entscheiden?**  
@@ -184,7 +184,7 @@ Universell komplex: Erfolg nur durch Spitzenleistung, Vermeidung von Engpässen 
 - Spitzenkräfte identifizieren, fördern und entlasten  
 - Schwache Mitglieder gezielt trainieren und unterstützen  
 - Breite Beteiligung aller Teammitglieder sicherstellen  
-- Klare Rollen, Risikomanagement, regelmäßige Reviews  
+- Klare Rollen, Risikomanagement, regelmässige Reviews  
 - Mischung aus autokratischen Kernentscheidungen und demokratischer Abstimmung für Teamaktivitäten
 
 **Wer soll entscheiden?**  
@@ -205,7 +205,7 @@ Eine einzelne Spitzenleistung kann den Gesamterfolg sicherstellen, andere Beitr�
 - Spitzenkräfte erkennen und gezielt fördern  
 - Freiraum für Kreativität geben  
 - Teammitglieder als Unterstützung einsetzen  
-- Regelmäßige Kontrolle der Kernleistung
+- Regelmässige Kontrolle der Kernleistung
 
 **Wer soll entscheiden?**  
 - Autokratisch oder auf Experten fokussiert
@@ -237,7 +237,7 @@ Keine einzelne Person kann den Erfolg allein sichern oder gefährden.
 
 **Strategien:**  
 - Breite Beteiligung fördern  
-- Aufgaben gleichmäßig verteilen  
+- Aufgaben gleichmässig verteilen  
 - Fortschritte sichtbar machen  
 - Motivation aller Teammitglieder hochhalten
 
