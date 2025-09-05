@@ -16,10 +16,10 @@ def aufgabenanalyse():
         - Du beantwortest **12 kurze Fragen** zu deiner Aufgabe auf einer Skala von **1 bis 7**  
           *(1 = trifft überhaupt nicht zu, 7 = trifft voll zu)*.
         - Die App analysiert deine Antworten und ordnet deine Aufgabe einem oder mehreren Aufgabentypen zu:
-            - **Disjunktiv:** Erfolg hängt stark von der **besten Leistung** im Team ab.  
-            - **Konjunktiv:** Erfolg hängt vom **schwächsten Glied** ab – alle müssen gut zusammenarbeiten.  
-            - **Additiv:** Jeder Beitrag zählt – die **Summe aller Leistungen** bestimmt den Erfolg.
-        - Du erhältst eine **Empfehlung**, wie du dein Team organisieren und Entscheidungen treffen kannst.
+            - **Disjunktiv:** Erfolg hängt stark von der besten Leistung im Team ab.  
+            - **Konjunktiv:** Erfolg hängt vom schwächsten Glied ab – alle müssen gut zusammenarbeiten.  
+            - **Additiv:** Jeder Beitrag zählt – die Summe aller Leistungen bestimmt den Erfolg.
+        - Du erhältst eine **ausführliche Empfehlung**, wie du Entscheidungen treffen und dein Team optimal organisieren kannst.
         """)
 
     with st.expander("💡 Nutzen:"):
@@ -39,7 +39,6 @@ def aufgabenanalyse():
 
     SCHWELLENWERT_HYBRID = 6  # Unterschied, ab dem wir von Hybrid sprechen
 
-    # 12 durchmischte Fragen
     fragen = [
         {"text": "Je mehr Mitglieder aktiv mitwirken, desto besser – auch kleine Beiträge summieren sich zu einem großen Ergebnis.", "typ": "additiv"},
         {"text": "Wenn auch nur eine Person ihre Aufgabe nicht erfüllt, ist das gesamte Projekt gefährdet.", "typ": "konjunktiv"},
@@ -55,13 +54,12 @@ def aufgabenanalyse():
         {"text": "Für den Erfolg reicht es, wenn eine Person die Aufgabe vollständig meistert – andere Beiträge sind nicht entscheidend.", "typ": "disjunktiv"},
     ]
 
-    # Punkte-Speicher
     punkte = {"disjunktiv": 0, "konjunktiv": 0, "additiv": 0}
 
-    # Formular für Fragen
+    # --- FORMULAR ---
     with st.form("fragen_form"):
         antworten = []
-        
+
         for i, frage in enumerate(fragen, start=1):
             antwort = st.slider(
                 f"{i}. {frage['text']}",
@@ -71,35 +69,44 @@ def aufgabenanalyse():
                 help="1 = trifft nicht zu, 7 = trifft voll zu"
             )
             antworten.append((frage['typ'], antwort))
-        
+
         submitted = st.form_submit_button("Analyse starten")
 
-    # --- AUSWERTUNG ---
     if submitted:
-        # Punkte summieren
+        # --- FUN FEATURE: KEINE ECHTE AUFGABE ---
+        durchschnitt = sum([antwort for _, antwort in antworten]) / len(antworten)
+        if durchschnitt < 2.0:
+            st.warning("🎭 Ergebnis: Keine Aufgabe erkannt")
+            st.write("""
+            Offenbar hast du aktuell gar keine echte Aufgabe – oder du hast die Fragen komplett auf Autopilot beantwortet.  
+            Vielleicht läuft bei dir einfach alles so perfekt, dass es nichts zu analysieren gibt. 😌  
+
+            💡 Tipp: Wenn das nicht stimmt, probiere es nochmal mit ehrlichen Antworten.  
+            Und falls doch: Gönn dir einen Kaffee und genieße den Leerlauf. ☕
+            """)
+            return
+
+        # --- PUNKTE SUMMIEREN ---
         for typ, antwort in antworten:
             punkte[typ] += antwort
 
-        # Prozentuale Verteilung
         gesamtpunkte = sum(punkte.values())
         prozentuale_verteilung = {
             typ: round((wert / gesamtpunkte) * 100, 1) for typ, wert in punkte.items()
         }
 
-        # Sortieren nach höchstem Wert
         sorted_typen = sorted(punkte.items(), key=lambda x: x[1], reverse=True)
         max_typ, max_punkte = sorted_typen[0]
         zweit_typ, zweit_punkte = sorted_typen[1]
 
         st.success("Analyse abgeschlossen!")
 
-        # Ergebnisse anzeigen
+        # --- ERGEBNISSE VISUALISIEREN ---
         col1, col2 = st.columns(2)
         with col1:
             st.subheader("📊 Punktestände")
             for typ, wert in punkte.items():
                 st.write(f"{typ.capitalize()}: {wert} Punkte")
-
         with col2:
             st.subheader("📈 Prozentuale Verteilung")
             for typ, prozent in prozentuale_verteilung.items():
@@ -108,62 +115,70 @@ def aufgabenanalyse():
         st.divider()
         st.subheader("🎯 Empfehlung")
 
-        # Hybrid-Entscheidung
+        # --- HYBRID-LOGIK ---
         if max_punkte - zweit_punkte <= SCHWELLENWERT_HYBRID:
-            st.info(f"**🔀 Hybride Aufgabe erkannt: {max_typ.capitalize()} + {zweit_typ.capitalize()}**")
-
+            # Bestimme Hybrid-Typ
             if {"disjunktiv", "konjunktiv"} == {max_typ, zweit_typ}:
-                st.write("""
-                Diese Aufgabe vereint Elemente von Disjunktiv und Konjunktiv.
-                - Fokussiere dich sowohl auf die stärksten Mitglieder, um Top-Leistungen zu ermöglichen,  
-                - als auch auf die schwächeren Mitglieder, da diese den Erfolg gefährden können.  
-                **Strategie:** intensive Koordination, Training und klare Rollen.
-                """)
+                typ = "Hybrid Disjunktiv + Konjunktiv"
+                bericht = """
+**Um was für eine Aufgabe handelt es sich?**  
+Eine Mischung aus disjunktiv und konjunktiv: Sowohl Spitzenleistung als auch das schwächste Glied beeinflussen den Erfolg.
+
+**Was bezeichnet diese Aufgabe?**  
+Die Aufgabe kombiniert Extreme: Spitzenleistungen treiben voran, aber Engpässe können alles stoppen.
+
+**Strategien:**  
+- Spitzenkräfte gezielt einsetzen und entlasten  
+- Schwächere Teammitglieder trainieren und unterstützen  
+- Klare Rollen und Verantwortlichkeiten  
+- Risikomanagement und kontinuierliche Abstimmung
+
+**Wer soll entscheiden?**  
+- Mix aus autokratisch (Spitzenkraft) und demokratisch (Teamkonsultation)
+"""
             elif {"disjunktiv", "additiv"} == {max_typ, zweit_typ}:
-                st.write("""
-                Diese Aufgabe vereint Elemente von Disjunktiv und Additiv.
-                - Nutze gezielt die Stärken der besten Mitglieder,  
-                - motiviere gleichzeitig alle anderen, kleine und regelmäßige Beiträge zu leisten.  
-                **Strategie:** Mischung aus Talentförderung und breiter Partizipation.
-                """)
+                typ = "Hybrid Disjunktiv + Additiv"
+                bericht = """
+**Um was für eine Aufgabe handelt es sich?**  
+Erfolg hängt sowohl von der besten Leistung als auch von der Summe aller Beiträge ab.
+
+**Was bezeichnet diese Aufgabe?**  
+Spitzenkraft treibt das Projekt voran, alle Beiträge erhöhen die Qualität.
+
+**Strategien:**  
+- Spitzenkräfte fördern  
+- Alle zu kleinen Beiträgen motivieren  
+- Regelmäßiges Monitoring  
+- Kombination aus Einzel- und Team-Feedback
+
+**Wer soll entscheiden?**  
+- Autokratisch bei Kernentscheidungen, demokratisch bei ergänzenden Aufgaben
+"""
             elif {"konjunktiv", "additiv"} == {max_typ, zweit_typ}:
-                st.write("""
-                Diese Aufgabe vereint Elemente von Konjunktiv und Additiv.
-                - Stelle sicher, dass **alle aktiv beitragen**,  
-                - und kümmere dich besonders um schwächere Mitglieder, um Engpässe zu vermeiden.  
-                **Strategie:** klare Aufgabenverteilung und gemeinsame Qualitätsstandards.
-                """)
+                typ = "Hybrid Konjunktiv + Additiv"
+                bericht = """
+**Um was für eine Aufgabe handelt es sich?**  
+Der Erfolg hängt vom schwächsten Mitglied und von der Summe aller Beiträge ab.
+
+**Was bezeichnet diese Aufgabe?**  
+Alle müssen mitarbeiten, individuelle Leistungen summieren sich zum Gesamterfolg.
+
+**Strategien:**  
+- Alle aktiv einbinden  
+- Schwächste Mitglieder gezielt fördern  
+- Arbeit transparent verteilen  
+- Kleine Teilergebnisse sichern
+
+**Wer soll entscheiden?**  
+- Demokratisch, Teamkonsens ist wichtig
+"""
             else:
-                st.write("Diese Aufgabe kombiniert verschiedene Aufgabentypen. Nutze eine flexible Strategie.")
+                typ = "Triple-Hybrid"
+                bericht = """
+**Um was für eine Aufgabe handelt es sich?**  
+Extrem komplex: Beste Leistung, schwächstes Glied und Summe aller Beiträge beeinflussen den Erfolg.
 
-        # Klarer Typ
-        else:
-            st.success(f"**🎯 Klarer Aufgabentyp: {max_typ.capitalize()}**")
+**Was bezeichnet diese Aufgabe?**  
+Universell komplex: Erfolg nur durch Spitzenleistung, Vermeidung von Engpässen und Teambeiträge.
 
-            if max_typ == "disjunktiv":
-                st.write("""
-                **Disjunktive Aufgabe:**  
-                - Erfolg hängt stark von den besten Leistungen ab.  
-                - Fokussiere dich auf deine Top-Mitglieder, um Spitzenleistungen zu fördern.  
-                - Schwächere können unterstützend wirken, sind aber nicht entscheidend.  
-                **Strategie:** gezielte Talentförderung und Freiräume für die besten Performer.
-                """)
-            elif max_typ == "konjunktiv":
-                st.write("""
-                **Konjunktive Aufgabe:**  
-                - Der Erfolg hängt vom schwächsten Mitglied ab.  
-                - Stelle sicher, dass alle gut kooperieren und niemand überfordert ist.  
-                - Schwächen müssen früh erkannt und aktiv ausgeglichen werden.  
-                **Strategie:** Teamtraining, Coaching und gegenseitige Unterstützung.
-                """)
-            elif max_typ == "additiv":
-                st.write("""
-                **Additive Aufgabe:**  
-                - Jeder Beitrag zählt und die Summe aller Leistungen ist entscheidend.  
-                - Verteile Arbeit gleichmäßig und motiviere alle, kontinuierlich beizutragen.  
-                **Strategie:** breite Beteiligung fördern und Fortschritte transparent machen.
-                """)
-
-# Start der App
-if __name__ == "__main__":
-    aufgabenanalyse()
+**Strateg
