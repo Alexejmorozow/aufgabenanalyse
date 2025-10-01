@@ -1,456 +1,871 @@
 import streamlit as st
 import time
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from matplotlib.backends.backend_pdf import PdfPages
-import io
-import textwrap
 import json
+import io
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+import base64
 
-# -------------------------
-# Decision Compass - Modular, Export, Visuals, Mehrsprachig
-# -------------------------
-
+# --- Page config ---
 st.set_page_config(page_title="Decision Compass", layout="wide")
 
-# --- Minimaler Sprachkern (DE / EN) ---
-LANG = {
-    "de": {
-        "home_title": "🧭 Decision Compass",
-        "home_intro": "Ein Tool, das gängige Management-Methoden unter einem Dach vereint.",
-        "choose_module": "Wähle Modul:",
+# --- Internationalization ---
+LANGUAGES = {
+    "DE": {
+        "title": "🧭 Decision Compass",
         "modules": ["🏠 Start", "🔎 Aufgaben-Analyse", "📊 SWOT-Analyse", "⏳ Eisenhower-Matrix", "👥 RACI-Matrix", "⚖️ Balanced Scorecard"],
-        "download_pdf": "PDF herunterladen",
-        "download_excel": "Excel herunterladen",
-        "export_all": "Gesamtratgeber exportieren",
-        "lang_label": "Sprache"
+        "export": "Exportieren",
+        "language": "Sprache"
     },
-    "en": {
-        "home_title": "🧭 Decision Compass",
-        "home_intro": "A tool that unites common management frameworks in one place.",
-        "choose_module": "Choose module:",
-        "modules": ["🏠 Start", "🔎 Task Analysis", "📊 SWOT Analysis", "⏳ Eisenhower Matrix", "👥 RACI Matrix", "⚖️ Balanced Scorecard"],
-        "download_pdf": "Download PDF",
-        "download_excel": "Download Excel",
-        "export_all": "Export full report",
-        "lang_label": "Language"
+    "EN": {
+        "title": "🧭 Decision Compass",
+        "modules": ["🏠 Home", "🔎 Task Analysis", "📊 SWOT Analysis", "⏳ Eisenhower Matrix", "👥 RACI Matrix", "⚖️ Balanced Scorecard"],
+        "export": "Export",
+        "language": "Language"
     }
 }
 
-# --- Sidebar: Sprache + Navigation ---
-lang = st.sidebar.selectbox("Sprache / Language", options=["DE", "EN"], index=0)
-L = LANG["de"] if lang == "DE" else LANG["en"]
+# --- Shared definitions ---
+TYP_EMOJI = {"disjunktiv": "⭐", "konjunktiv": "⛓️", "additiv": "➕"}
 
-st.sidebar.title(L["home_title"])
-module = st.sidebar.radio(L["choose_module"], L["modules"])
+FARBEN = {
+    "light": {"disjunktiv": "#E63946", "konjunktiv": "#F1FA3C", "additiv": "#2A9D8F", "background": "#FFFFFF", "text": "#000000", "box": "#f9f9f9"},
+    "dark": {"disjunktiv": "#FF6B6B", "konjunktiv": "#FFD93D", "additiv": "#4ECDC4", "background": "#121212", "text": "#FFFFFF", "box": "#1E1E1E"}
+}
 
-# -------------------------
-# Utility Funktionen (zentral, damit Code schlank bleibt)
-# -------------------------
+# --- Utility Functions ---
+def get_text(key, lang):
+    """Get translated text for given key"""
+    translations = {
+        # Start Page
+        "welcome": {
+            "DE": "Willkommen zum Decision Compass! Dieses Tool vereint bewährte Methoden der Entscheidungsfindung unter einem Dach.",
+            "EN": "Welcome to Decision Compass! This tool combines proven decision-making methods under one roof."
+        },
+        "choose_module": {
+            "DE": "Wähle ein Modul in der linken Leiste und arbeite Schritt für Schritt.",
+            "EN": "Choose a module in the left sidebar and work step by step."
+        },
+        # Common
+        "export_pdf": {"DE": "📄 Als PDF exportieren", "EN": "📄 Export as PDF"},
+        "export_excel": {"DE": "📊 Als Excel exportieren", "EN": "📊 Export as Excel"},
+        "analysis_complete": {"DE": "✅ Analyse abgeschlossen!", "EN": "✅ Analysis complete!"},
+        # Task Analysis
+        "task_analysis_title": {"DE": "🔎 Aufgaben-Analyse", "EN": "🔎 Task Analysis"},
+        "task_analysis_desc": {
+            "DE": "Bestimme den Typ deiner Aufgabe: disjunktiv, konjunktiv oder additiv",
+            "EN": "Determine your task type: disjunctive, conjunctive or additive"
+        },
+        # Add more translations as needed...
+    }
+    return translations.get(key, {}).get(lang, key)
 
-def format_text_for_html(text):
-    """Wandelt Zeilen in HTML-Listenelemente um"""
-    if not text:
-        return "<em>Keine Einträge</em>"
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    if not lines:
-        return "<em>Keine Einträge</em>"
-    # sichere Zeichenbrechung
-    lines_wrapped = [textwrap.fill(ln, width=60) for ln in lines]
-    return "<br>• " + "<br>• ".join(lines_wrapped)
-
-
-def render_box(title, body_html, color_left="#000000", bg="#f8f9fa"):
-    st.markdown(f"""
-    <div style='background:{bg}; padding:12px; border-radius:10px; margin-bottom:10px; border-left:6px solid {color_left}'>
-      <h4 style='margin:0 0 8px 0'>{title}</h4>
-      <div style='line-height:1.35'>{body_html}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def animated_progress(value, max_value, color, text, speed=0.01):
+def animated_progress(value, max_value, color, text, speed=0.02):
+    """Animated progress bar with final value display"""
     placeholder = st.empty()
-    max_value = max(1, max_value)
-    steps = int(max(1, min(value, max_value)))
-    for i in range(1, steps + 1):
-        pct = min(i / max_value, 1.0)
-        placeholder.progress(pct, text=f"{text}: {i}")
+    max_value = max(max_value, 1)
+    for i in range(1, value + 1):
+        percent = min(i / max_value, 1.0)
+        placeholder.progress(percent, text=f"{text}: {i}")
         time.sleep(speed)
     st.markdown(f"<span style='color:{color}; font-weight:bold'>{text}: {value}</span>", unsafe_allow_html=True)
 
+def create_colored_box(title, content, bg_color, border_color="#888888"):
+    """Create a styled colored box"""
+    st.markdown(f"""
+    <div style='border:2px solid {border_color}; padding:15px; border-radius:10px; background-color:{bg_color}; margin-bottom:15px'>
+    <h3 style='margin-top:0;'>{title}</h3>
+    {content}
+    </div>
+    """, unsafe_allow_html=True)
 
-def to_excel_bytes(sheets: dict):
-    """Erzeugt Excel im Arbeitsspeicher. sheets: dict mit name -> DataFrame"""
-    output = io.BytesIO()
-    try:
+def format_list_text(text, default_text="Keine Einträge"):
+    """Format text with bullet points"""
+    if not text:
+        return f"<em>{default_text}</em>"
+    lines = text.split('\n')
+    formatted = '<br>• '.join(lines)
+    return f"• {formatted}"
+
+def create_download_link(data, filename, text):
+    """Create a download link for data"""
+    if isinstance(data, pd.DataFrame):
+        output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            for name, df in sheets.items():
-                if isinstance(df, pd.DataFrame):
-                    df.to_excel(writer, sheet_name=name[:31], index=False)
-                else:
-                    pd.DataFrame(df).to_excel(writer, sheet_name=name[:31], index=False)
-            writer.save()
-    except Exception:
-        # Fallback: einfacher Excel mit pandas (kann kleiner Formatverlust haben)
-        with pd.ExcelWriter(output) as writer:
-            for name, df in sheets.items():
-                pd.DataFrame(df).to_excel(writer, sheet_name=name[:31], index=False)
-    output.seek(0)
-    return output
+            data.to_excel(writer, index=False, sheet_name='Results')
+        data = output.getvalue()
+    
+    b64 = base64.b64encode(data).decode()
+    href = f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}">{text}</a>'
+    return href
 
+def export_to_pdf(content_dict, title):
+    """Export content to PDF"""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    # Title
+    title_para = Paragraph(f"<b>{title}</b>", styles['Title'])
+    story.append(title_para)
+    story.append(Spacer(1, 12))
+    
+    # Add content
+    for section, content in content_dict.items():
+        section_para = Paragraph(f"<b>{section}</b>", styles['Heading2'])
+        story.append(section_para)
+        content_para = Paragraph(str(content), styles['Normal'])
+        story.append(content_para)
+        story.append(Spacer(1, 12))
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
 
-def figs_to_pdf_bytes(figs):
-    buf = io.BytesIO()
-    with PdfPages(buf) as pdf:
-        for fig in figs:
-            pdf.savefig(fig, bbox_inches='tight')
-            plt.close(fig)
-    buf.seek(0)
-    return buf
+# --- Visualization Functions ---
+def create_swot_quadrant(strengths, weaknesses, opportunities, threats):
+    """Create SWOT analysis as 2x2 quadrant visualization"""
+    st.markdown("""
+    <style>
+    .swot-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin: 20px 0;
+    }
+    .swot-item {
+        padding: 15px;
+        border-radius: 10px;
+        min-height: 200px;
+    }
+    .strengths { background-color: #d4edda; border-left: 5px solid #28a745; }
+    .weaknesses { background-color: #f8d7da; border-left: 5px solid #dc3545; }
+    .opportunities { background-color: #cce7ff; border-left: 5px solid #007bff; }
+    .threats { background-color: #fff3cd; border-left: 5px solid #ffc107; }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div class="swot-grid">
+        <div class="swot-item strengths">
+            <h4>💪 Stärken / Strengths</h4>
+            {format_list_text(strengths)}
+        </div>
+        <div class="swot-item weaknesses">
+            <h4>📉 Schwächen / Weaknesses</h4>
+            {format_list_text(weaknesses)}
+        </div>
+        <div class="swot-item opportunities">
+            <h4>🚀 Chancen / Opportunities</h4>
+            {format_list_text(opportunities)}
+        </div>
+        <div class="swot-item threats">
+            <h4>⚠️ Risiken / Threats</h4>
+            {format_list_text(threats)}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# -------------------------
-# Visual Helfer: Plots
-# -------------------------
+def create_eisenhower_matrix(tasks):
+    """Create Eisenhower matrix as colored grid"""
+    quadrants = {
+        "Q1": {"title": "🔴 Wichtig & Dringend", "tasks": [], "color": "#ff6b6b"},
+        "Q2": {"title": "🟢 Wichtig & Nicht Dringend", "tasks": [], "color": "#51cf66"},
+        "Q3": {"title": "🟡 Nicht Wichtig & Dringend", "tasks": [], "color": "#ffd43b"},
+        "Q4": {"title": "⚫ Nicht Wichtig & Nicht Dringend", "tasks": [], "color": "#868e96"}
+    }
+    
+    for task in tasks:
+        quadrants[task["quadrant"]]["tasks"].append(task)
+    
+    st.markdown("""
+    <style>
+    .eisenhower-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin: 20px 0;
+    }
+    .quadrant {
+        padding: 15px;
+        border-radius: 10px;
+        min-height: 250px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown(f"""
+    <div class="eisenhower-grid">
+        <div class="quadrant" style="background-color: {quadrants['Q1']['color']}20; border-left: 5px solid {quadrants['Q1']['color']}">
+            <h4>{quadrants['Q1']['title']}</h4>
+            {"<br>".join([f"• {task['beschreibung']}" for task in quadrants['Q1']['tasks']]) or "Keine Aufgaben"}
+        </div>
+        <div class="quadrant" style="background-color: {quadrants['Q2']['color']}20; border-left: 5px solid {quadrants['Q2']['color']}">
+            <h4>{quadrants['Q2']['title']}</h4>
+            {"<br>".join([f"• {task['beschreibung']}" for task in quadrants['Q2']['tasks']]) or "Keine Aufgaben"}
+        </div>
+        <div class="quadrant" style="background-color: {quadrants['Q3']['color']}20; border-left: 5px solid {quadrants['Q3']['color']}">
+            <h4>{quadrants['Q3']['title']}</h4>
+            {"<br>".join([f"• {task['beschreibung']}" for task in quadrants['Q3']['tasks']]) or "Keine Aufgaben"}
+        </div>
+        <div class="quadrant" style="background-color: {quadrants['Q4']['color']}20; border-left: 5px solid {quadrants['Q4']['color']}">
+            <h4>{quadrants['Q4']['title']}</h4>
+            {"<br>".join([f"• {task['beschreibung']}" for task in quadrants['Q4']['tasks']]) or "Keine Aufgaben"}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-def create_swot_figure(staerken, schwaechen, chancen, risiken):
-    fig, ax = plt.subplots(figsize=(8, 8))
-    ax.set_xlim(0, 2)
-    ax.set_ylim(0, 2)
-    ax.axis('off')
+# --- Sidebar / Navigation ---
+st.sidebar.title("🧭 Decision Compass")
 
-    # Rechtecke füllen (vier Felder)
-    ax.add_patch(patches.Rectangle((0, 1), 1, 1, facecolor='#d4edda', edgecolor='none'))  # Stärken
-    ax.add_patch(patches.Rectangle((1, 1), 1, 1, facecolor='#f8d7da', edgecolor='none'))  # Schwächen
-    ax.add_patch(patches.Rectangle((0, 0), 1, 1, facecolor='#cce7ff', edgecolor='none'))  # Chancen
-    ax.add_patch(patches.Rectangle((1, 0), 1, 1, facecolor='#fff3cd', edgecolor='none'))  # Risiken
+# Language selector
+language = st.sidebar.selectbox("🌐 Sprache / Language", ["DE", "EN"], index=0)
 
-    # Titel in Feldern
-    ax.text(0.5, 1.85, 'Stärken', ha='center', va='center', fontsize=12, weight='bold', color='#155724')
-    ax.text(1.5, 1.85, 'Schwächen', ha='center', va='center', fontsize=12, weight='bold', color='#721c24')
-    ax.text(0.5, 0.85, 'Chancen', ha='center', va='center', fontsize=12, weight='bold', color='#004085')
-    ax.text(1.5, 0.85, 'Risiken', ha='center', va='center', fontsize=12, weight='bold', color='#856404')
+# Navigation
+module = st.sidebar.radio("Navigation:", LANGUAGES[language]["modules"])
 
-    # Inhalte platzieren
-    def place_text(box_x, box_y, text_lines):
-        x = box_x + 0.05
-        y = box_y + 0.8
-        wrapped = [textwrap.fill(ln, 40) for ln in text_lines]
-        ax.text(x, y, '
-'.join(['• ' + ln for ln in wrapped]), ha='left', va='top', fontsize=10)
+# Export section in sidebar
+st.sidebar.markdown("---")
+st.sidebar.subheader(LANGUAGES[language]["export"])
 
-    place_text(0, 1, [ln for ln in staerken.splitlines() if ln.strip()])
-    place_text(1, 1, [ln for ln in schwaechen.splitlines() if ln.strip()])
-    place_text(0, 0, [ln for ln in chancen.splitlines() if ln.strip()])
-    place_text(1, 0, [ln for ln in risiken.splitlines() if ln.strip()])
-
-    return fig
-
-
-def create_eisenhower_figure(tasks):
-    fig, axes = plt.subplots(2, 2, figsize=(8, 8))
-    plt.subplots_adjust(hspace=0.3)
-    # Quadrant Farben
-    colors = [['#ff6b6b', '#51cf66'], ['#ffd43b', '#868e96']]
-    titles = [['Q1: Wichtig & Dringend', 'Q2: Wichtig & Nicht Dringend'], ['Q3: Nicht Wichtig & Dringend', 'Q4: Nicht Wichtig & Nicht Dringend']]
-
-    # Gruppen
-    groups = {'Q1': [], 'Q2': [], 'Q3': [], 'Q4': []}
-    for t in tasks:
-        q = t.get('quadrant')
-        groups.setdefault(q, []).append(t['beschreibung'])
-
-    for i in range(2):
-        for j in range(2):
-            ax = axes[i, j]
-            ax.axis('off')
-            ax.set_facecolor('#ffffff')
-            col = colors[i][j]
-            ax.add_patch(patches.Rectangle((0, 0), 1, 1, facecolor=col + '20', edgecolor='none'))
-            ax.text(0.5, 0.95, titles[i][j], ha='center', va='top', fontsize=12, weight='bold')
-            items = groups[['Q1','Q2','Q3','Q4'][i*2+j]]
-            y = 0.8
-            for it in items:
-                ax.text(0.05, y, f'• {it}', fontsize=10, va='top')
-                y -= 0.1
-    return fig
-
-# -------------------------
-# Module: Start
-# -------------------------
-if module.startswith('🏠'):
-    st.title(L['home_title'])
-    st.write(L['home_intro'])
+# --- START PAGE ---
+if module == LANGUAGES[language]["modules"][0]:
+    st.title("🧭 Decision Compass")
+    
+    st.write(get_text("welcome", language))
+    st.write(get_text("choose_module", language))
+    
     st.divider()
-    st.subheader('Kurz:')
-    st.write('- Task Analyse: Typbestimmung (disjunktiv / konjunktiv / additiv)')
-    st.write('- SWOT: 4-Felder mit Handlungsvorlagen')
-    st.write('- Eisenhower: Priorität nach Wichtig/Dringend')
-    st.write('- RACI: Rollen & Verantwortungen')
-    st.write('- BSC: Ziele & KPI in 4 Perspektiven')
-    st.divider()
-    st.info('Nutze Menu links, um Modul zu wählen. Export per Button am Modulende.')
+    
+    # Module descriptions
+    modules_info = {
+        "🔎": {
+            "DE": ("Aufgaben-Analyse", "Bestimme den Typ deiner Aufgabe: disjunktiv, konjunktiv oder additiv. Ideal für Team-Projekte und Arbeitsverteilung."),
+            "EN": ("Task Analysis", "Determine your task type: disjunctive, conjunctive or additive. Ideal for team projects and work distribution.")
+        },
+        "📊": {
+            "DE": ("SWOT-Analyse", "Analysiere Stärken, Schwächen, Chancen und Risiken. Perfekt für strategische Planung und Entscheidungsfindung."),
+            "EN": ("SWOT Analysis", "Analyze strengths, weaknesses, opportunities and threats. Perfect for strategic planning and decision making.")
+        },
+        "⏳": {
+            "DE": ("Eisenhower-Matrix", "Priorisiere Aufgaben nach Dringlichkeit und Wichtigkeit. Hilfreich für persönliches Zeitmanagement."),
+            "EN": ("Eisenhower Matrix", "Prioritize tasks by urgency and importance. Helpful for personal time management.")
+        },
+        "👥": {
+            "DE": ("RACI-Matrix", "Definiere Verantwortlichkeiten in Projekten. Essenziell für klare Rollenzuweisung in Teams."),
+            "EN": ("RACI Matrix", "Define responsibilities in projects. Essential for clear role assignment in teams.")
+        },
+        "⚖️": {
+            "DE": ("Balanced Scorecard", "Strategische Ziele aus verschiedenen Perspektiven. Ideal für Unternehmenssteuerung."),
+            "EN": ("Balanced Scorecard", "Strategic objectives from different perspectives. Ideal for corporate management.")
+        }
+    }
+    
+    cols = st.columns(3)
+    for idx, (emoji, info) in enumerate(modules_info.items()):
+        with cols[idx % 3]:
+            title, description = info[language]
+            st.subheader(f"{emoji} {title}")
+            st.write(description)
+            st.button(f"Öffne {title}" if language == "DE" else f"Open {title}", key=f"btn_{idx}")
 
-# -------------------------
-# Module: Aufgaben-Analyse
-# -------------------------
-elif module.startswith('🔎'):
-    st.title('🔎 Aufgaben-Analyse')
+# --- TASK ANALYSIS ---
+elif module == LANGUAGES[language]["modules"][1]:
+    st.title("🔎 " + ("Aufgaben-Analyse" if language == "DE" else "Task Analysis"))
+    
+    with st.expander("ℹ️ " + ("Über dieses Tool" if language == "DE" else "About this tool")):
+        st.write("""
+        **📋 Methodenbeschreibung:**
+        Die Aufgaben-Analyse unterscheidet zwischen drei Aufgabentypen:
+        
+        • **⭐ Disjunktiv**: Erfolg hängt von der besten Leistung ab (z.B. Forschung, Innovation)
+        • **⛓️ Konjunktiv**: Erfolg hängt vom schwächsten Glied ab (z.B. Produktionskette)  
+        • **➕ Additiv**: Jeder Beitrag zählt gleich (z.B. Crowdsourcing, Brainstorming)
+        
+        **🎯 Wann einsetzen?**
+        - Bei der Planung von Team-Projekten
+        - Zur optimalen Ressourcenverteilung
+        - Für die Auswahl geeigneter Arbeitsmethoden
+        
+        **📝 Vorgehen:**
+        1. Beantworte alle 12 Fragen ehrlich
+        2. Analysiere die Ergebnisverteilung
+        3. Beachte die Handlungsempfehlungen
+        """)
+    
+    dark_mode = st.checkbox("🌙 " + ("Dark Mode aktivieren" if language == "DE" else "Activate Dark Mode"), value=False)
+    mode = "dark" if dark_mode else "light"
+    colors = FARBEN[mode]
 
-    colors = {"disjunktiv": "#E63946", "konjunktiv": "#F1FA3C", "additiv": "#2A9D8F"}
+    st.markdown(f"""
+    <style>
+    .stApp {{ background-color: {colors['background']}; color: {colors['text']}; }}
+    .css-1d391kg, .css-1d391kg * {{ color: {colors['text']} !important; }}
+    </style>
+    """, unsafe_allow_html=True)
 
-    st.write('Beantworte 12 kurze Fragen auf einer Skala von 1 bis 7.')
+    st.write("Beantworte 12 kurze Fragen auf einer Skala von 1 bis 7.")
+
+    SCHWELLENWERT_HYBRID = 6
     fragen = [
-        {"text": "Je mehr Mitglieder aktiv mitwirken, desto besser – auch kleine Beiträge summieren sich.", "typ": "additiv"},
-        {"text": "Wenn auch nur eine Person ihre Aufgabe nicht erfüllt, ist das Projekt gefährdet.", "typ": "konjunktiv"},
-        {"text": "Eine einzelne Spitzenidee kann den gesamten Erfolg sicherstellen.", "typ": "disjunktiv"},
-        {"text": "Die Kooperation leidet, wenn ein Mitglied nicht nötige Qualität liefert.", "typ": "konjunktiv"},
-        {"text": "Erfolg entsteht durch die Summe vieler Beiträge, nicht nur Spitzenleistung.", "typ": "additiv"},
-        {"text": "Die Leistung der besten Person entscheidet oft über Erfolg.", "typ": "disjunktiv"},
-        {"text": "Fehler einzelner wirken stark auf Gesamtleistung.", "typ": "konjunktiv"},
-        {"text": "Wenn alle gleichmäßig mitwirken, steigt Erfolgswahrscheinlichkeit.", "typ": "disjunktiv"},
-        {"text": "Die Leistung des schwächsten Mitglieds bestimmt oft das Ergebnis.", "typ": "konjunktiv"},
-        {"text": "Jeder Beitrag trägt bei, ein Ausfall führt nicht sofort zum Scheitern.", "typ": "additiv"},
-        {"text": "Kleine, regelm. Beiträge können zusammen sehr stark werden.", "typ": "additiv"},
-        {"text": "Für Erfolg reicht oft, wenn eine Person Aufgabe vollständig meistert.", "typ": "disjunktiv"},
+        {"text": "Je mehr Mitglieder aktiv mitwirken, desto besser – auch kleine Beiträge summieren sich zu einem großen Ergebnis.", "typ": "additiv"},
+        {"text": "Wenn auch nur eine Person ihre Aufgabe nicht erfüllt, ist das gesamte Projekt gefährdet.", "typ": "konjunktiv"},
+        {"text": "Eine einzelne Spitzenidee oder herausragende Leistung kann den gesamten Projekterfolg sicherstellen.", "typ": "disjunktiv"},
+        {"text": "Die Zusammenarbeit scheitert, wenn ein einzelnes Mitglied nicht die nötige Qualität liefert.", "typ": "konjunktiv"},
+        {"text": "Erfolg entsteht vor allem durch die Summe vieler Einzelbeiträge, nicht durch einzelne Spitzenleistungen.", "typ": "additiv"},
+        {"text": "Die Leistung der besten Person bestimmt weitgehend, ob das Team erfolgreich ist, unabhängig von den anderen.", "typ": "disjunktiv"},
+        {"text": "Fehler oder Ausfälle einzelner wirken sich sofort und stark auf den Gesamterfolg aus.", "typ": "konjunktiv"},
+        {"text": "Wenn alle gleichmäßig mitwirken, steigt die Wahrscheinlichkeit für einen erfolgreichen Abschluss deutlich.", "typ": "disjunktiv"},
+        {"text": "Die Leistung des schwächsten Mitglieds bestimmt maßgeblich, ob das Team sein Ziel erreicht.", "typ": "konjunktiv"},
+        {"text": "Jeder Beitrag trägt zum Gesamterfolg bei, aber kein einzelner Ausfall bringt alles zum Scheitern.", "typ": "additiv"},
+        {"text": "Auch kleine und regelmäßige Beiträge aller Beteiligten können zusammen zu einem sehr starken Gesamtergebnis führen.", "typ": "additiv"},
+        {"text": "Für den Erfolg reicht es, wenn eine Person die Aufgabe vollständig meistert – andere Beiträge sind nicht entscheidend.", "typ": "disjunktiv"},
     ]
 
-    if 'antworten' not in st.session_state:
-        st.session_state.antworten = [4] * len(fragen)
+    punkte = {"disjunktiv": 0, "konjunktiv": 0, "additiv": 0}
 
-    with st.form('form_aufgaben'):
-        for i, f in enumerate(fragen, start=1):
-            st.write(f"{i}. {f['text']}")
-            val = st.slider('', 1, 7, st.session_state.antworten[i-1], key=f"a_{i}")
-            st.session_state.antworten[i-1] = val
-        if st.form_submit_button('Analyse starten'):
-            # Auswertung
-            punkte = {'disjunktiv': 0, 'konjunktiv': 0, 'additiv': 0}
-            for ans, f in zip(st.session_state.antworten, fragen):
-                punkte[f['typ']] += ans
-            ges = sum(punkte.values()) or 1
-            proz = {k: round(v/ges*100,1) for k,v in punkte.items()}
+    with st.form("fragen_form"):
+        antworten = []
+        for i, frage in enumerate(fragen, start=1):
+            st.markdown(f"<span style='color:{colors['text']}; font-weight:bold'>{i}. {frage['text']}</span>", unsafe_allow_html=True)
+            antwort = st.slider("", min_value=1, max_value=7, value=4, key=f"slider_{i}")
+            antworten.append((frage['typ'], antwort))
+        submitted = st.form_submit_button("Analyse starten" if language == "DE" else "Start Analysis")
 
-            st.subheader('Ergebnis')
-            for k,v in punkte.items():
-                animated_progress(v, 7, colors[k], f"{k} ({proz[k]}%)")
+    if submitted:
+        durchschnitt = sum([antwort for _, antwort in antworten]) / len(antworten)
+        if durchschnitt < 2.0:
+            st.warning("🎭 " + ("Ergebnis: Keine Aufgabe erkannt – Zeit für einen Kaffee ☕" if language == "DE" else "Result: No task recognized - time for coffee ☕"))
+        else:
+            for typ, antwort in antworten:
+                punkte[typ] += antwort
 
-            # Empfehlung
-            emp = []
-            if punkte['disjunktiv'] == max(punkte.values()):
-                emp.append('Disjunktiv: Fokus auf Spitzenleistung, klare Kernverantwortung.')
-            if punkte['konjunktiv'] == max(punkte.values()):
-                emp.append('Konjunktiv: Support für schwache Teammitgl, enge Koordination.')
-            if punkte['additiv'] == max(punkte.values()):
-                emp.append('Additiv: Alle einbinden, Microziele, Sichtbarkeit von Fortschritt.')
+            gesamtpunkte = sum(punkte.values())
+            prozentuale_verteilung = {typ: round((wert / gesamtpunkte) * 100, 1) for typ, wert in punkte.items()}
+            max_punkte = max(punkte.values())
+            hybrid_typen = [typ for typ, wert in punkte.items() if max_punkte - wert <= SCHWELLENWERT_HYBRID]
 
-            render_box('Empfehlung', '<br>'.join(emp), color_left='#0d6efd')
-
-# -------------------------
-# Module: SWOT
-# -------------------------
-elif module.startswith('📊'):
-    st.title('📊 SWOT-Analyse')
-    col1, col2 = st.columns(2)
-    with col1:
-        staerken = st.text_area('Stärken (eine pro Zeile)')
-        chancen = st.text_area('Chancen (eine pro Zeile)')
-    with col2:
-        schwaechen = st.text_area('Schwächen (eine pro Zeile)')
-        risiken = st.text_area('Risiken (eine pro Zeile)')
-
-    if st.button('SWOT visualisieren / exportieren'):
-        fig = create_swot_figure(staerken, schwaechen, chancen, risiken)
-        st.pyplot(fig)
-
-        # Excel
-        df_swot = pd.DataFrame({'Stärken': [ln for ln in staerken.splitlines() if ln.strip()],
-                                'Schwächen': pd.NA,
-                                'Chancen': pd.NA,
-                                'Risiken': pd.NA})
-        # Sicherer Aufbau: jede Spalte als eigene Liste der gleichen Länge
-        maxlen = max(len(staerken.splitlines()), len(schwaechen.splitlines()), len(chancen.splitlines()), len(risiken.splitlines()))
-        def col_list(txt):
-            lst = [ln for ln in txt.splitlines() if ln.strip()]
-            lst += [''] * (maxlen - len(lst))
-            return lst
-        sheets = {
-            'SWOT': pd.DataFrame({
-                'Stärken': col_list(staerken),
-                'Schwächen': col_list(schwaechen),
-                'Chancen': col_list(chancen),
-                'Risiken': col_list(risiken)
+            st.success(get_text("analysis_complete", language))
+            
+            # Export Data
+            export_data = pd.DataFrame({
+                'Aufgabentyp': list(punkte.keys()),
+                'Punkte': list(punkte.values()),
+                'Prozent': list(prozentuale_verteilung.values())
             })
-        }
-        excel_bytes = to_excel_bytes(sheets)
-        st.download_button(L['download_excel'], data=excel_bytes, file_name='swot.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("📊 " + ("Punktestände" if language == "DE" else "Points"))
+                for typ, wert in punkte.items():
+                    animated_progress(value=wert, max_value=7, color=colors[typ], text=f"{TYP_EMOJI[typ]} {typ.capitalize()}")
+            with col2:
+                st.subheader("📈 " + ("Prozentuale Verteilung" if language == "DE" else "Percentage Distribution"))
+                for typ, prozent in prozentuale_verteilung.items():
+                    animated_progress(value=int(prozent), max_value=100, color=colors[typ], text=f"{TYP_EMOJI[typ]} {typ.capitalize()} %", speed=0.01)
 
-        # PDF mit Plot
-        pdf_bytes = figs_to_pdf_bytes([fig])
-        st.download_button(L['download_pdf'], data=pdf_bytes, file_name='swot.pdf', mime='application/pdf')
+            st.divider()
+            st.subheader("🎯 " + ("Empfehlung" if language == "DE" else "Recommendation"))
+            typ_name = " + ".join([f"{TYP_EMOJI[typ]} {typ.capitalize()}" for typ in hybrid_typen])
+            
+            recommendations = {
+                "disjunktiv": {
+                    "DE": """**Aufgabe:** Disjunktiv ⭐ – Erfolg hängt von der besten Leistung ab.
+**Stolpersteine:** Schwache Mitglieder vernachlässigt, Überlastung Spitzenkräfte.
+**Strategie:** Stärken gezielt fördern, Kontrolle der Kernleistungen, Entscheidungen eher autokratisch.""",
+                    "EN": """**Task:** Disjunctive ⭐ – Success depends on the best performance.
+**Pitfalls:** Weak members neglected, overload of top performers.
+**Strategy:** Specifically promote strengths, control core performances, rather autocratic decisions."""
+                },
+                "konjunktiv": {
+                    "DE": """**Aufgabe:** Konjunktiv ⛓️ – Erfolg hängt vom schwächsten Glied ab.
+**Stolpersteine:** Schwache Mitglieder gefährden Erfolg.
+**Strategie:** Unterstützung schwacher Mitglieder, intensive Zusammenarbeit, Entscheidungen demokratisch.""",
+                    "EN": """**Task:** Conjunctive ⛓️ – Success depends on the weakest link.
+**Pitfalls:** Weak members endanger success.
+**Strategy:** Support weak members, intensive collaboration, democratic decisions."""
+                },
+                "additiv": {
+                    "DE": """**Aufgabe:** Additiv ➕ – Jeder Beitrag zählt.
+**Stolpersteine:** Einzelne Beiträge unterschätzt, Motivation schwankt.
+**Strategie:** Alle einbeziehen, Arbeit gleichmäßig verteilen, Fortschritte sichtbar machen.""",
+                    "EN": """**Task:** Additive ➕ – Every contribution counts.
+**Pitfalls:** Individual contributions underestimated, motivation fluctuates.
+**Strategy:** Include everyone, distribute work evenly, make progress visible."""
+                }
+            }
+            
+            bericht = ""
+            for typ in hybrid_typen:
+                bericht += recommendations[typ][language] + "\n\n"
+            
+            create_colored_box(typ_name, bericht, colors["box"])
+            
+            # Export Buttons
+            st.divider()
+            st.subheader("📤 " + ("Export" if language == "DE" else "Export"))
+            col_exp1, col_exp2 = st.columns(2)
+            
+            with col_exp1:
+                if st.button(get_text("export_pdf", language)):
+                    pdf_content = {
+                        "Punktestände": str(punkte),
+                        "Prozentuale Verteilung": str(prozentuale_verteilung),
+                        "Empfehlung": bericht
+                    }
+                    pdf_file = export_to_pdf(pdf_content, "Aufgaben-Analyse Ergebnisse")
+                    st.markdown(create_download_link(pdf_file.getvalue(), "task_analysis.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
+            
+            with col_exp2:
+                if st.button(get_text("export_excel", language)):
+                    st.markdown(create_download_link(export_data, "task_analysis.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
 
-    # Anleitung
-    with st.expander('Wie vorgehen?'):
-        st.write('''
-- Formuliere klare, kurze Stichpunkte pro Feld.
-- Nutze SO / WO / ST / WT Ableitungen, um Handlungsfelder zu definieren.
-- Priorisiere 2–3 Kerninitiativen aus Kombinationen der Felder.
-''')
+# --- SWOT ANALYSIS ---
+elif module == LANGUAGES[language]["modules"][2]:
+    st.title("📊 " + ("SWOT-Analyse" if language == "DE" else "SWOT Analysis"))
+    
+    with st.expander("ℹ️ " + ("Über dieses Tool" if language == "DE" else "About this tool")):
+        st.write("""
+        **📋 Methodenbeschreibung:**
+        Die SWOT-Analyse ist ein strategisches Planungsinstrument zur Bewertung von:
+        - **Stärken** (interne, positive Faktoren)
+        - **Schwächen** (interne, negative Faktoren) 
+        - **Chancen** (externe, positive Faktoren)
+        - **Risiken** (externe, negative Faktoren)
+        
+        **🎯 Wann einsetzen?**
+        - Vor wichtigen strategischen Entscheidungen
+        - Bei der Unternehmens- oder Produktplanung
+        - Für persönliche Karriere-Entscheidungen
+        - Bei der Bewertung von Projekten oder Investitionen
+        
+        **📝 Vorgehen:**
+        1. Sammle alle relevanten internen Stärken und Schwächen
+        2. Identifiziere externe Chancen und Risiken
+        3. Analysiere Wechselwirkungen zwischen den Quadranten
+        4. Leite strategische Maßnahmen ab
+        """)
+    
+    st.write("Analysiere Stärken, Schwächen, Chancen und Risiken deiner Situation.")
 
-# -------------------------
-# Module: Eisenhower
-# -------------------------
-elif module.startswith('⏳'):
-    st.title('⏳ Eisenhower-Matrix')
-    if 'e_tasks' not in st.session_state:
-        st.session_state.e_tasks = []
-
-    with st.form('e_task_form'):
-        tname = st.text_input('Aufgabe')
-        wichtig = st.checkbox('Wichtig', value=True)
-        dringend = st.checkbox('Dringend', value=False)
-        if st.form_submit_button('Hinzufügen') and tname:
-            quad = 'Q1' if wichtig and dringend else 'Q2' if wichtig and not dringend else 'Q3' if not wichtig and dringend else 'Q4'
-            st.session_state.e_tasks.append({'beschreibung': tname, 'quadrant': quad})
-            st.experimental_rerun()
-
-    if st.session_state.e_tasks:
-        fig = create_eisenhower_figure(st.session_state.e_tasks)
-        st.pyplot(fig)
-
-        # Excel
-        df_tasks = pd.DataFrame(st.session_state.e_tasks)
-        excel = to_excel_bytes({'Eisenhower': df_tasks})
-        st.download_button(L['download_excel'], data=excel, file_name='eisenhower.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        # PDF
-        pdf = figs_to_pdf_bytes([fig])
-        st.download_button(L['download_pdf'], data=pdf, file_name='eisenhower.pdf', mime='application/pdf')
-
-    with st.expander('Vorgehen'):
-        st.write('''
-- Sammle alle Aufgaben für ein konkretes Projekt oder einen Tag.
-- Bewerte Wichtigkeit und Dringlichkeit real.
-- Handle Q1 sofort, plane Q2, delegiere Q3, und streiche Q4.
-''')
-
-# -------------------------
-# Module: RACI
-# -------------------------
-elif module.startswith('👥'):
-    st.title('👥 RACI-Matrix')
-    if 'raci_roles' not in st.session_state:
-        st.session_state.raci_roles = ['Projektleitung', 'Team']
-    if 'raci_tasks' not in st.session_state:
-        st.session_state.raci_tasks = []
-
-    st.subheader('Rollen')
-    col1, col2 = st.columns([3,1])
+    col1, col2 = st.columns(2)
+    
     with col1:
-        new_role = st.text_input('Neue Rolle')
+        st.subheader("💪 " + ("Interne Faktoren" if language == "DE" else "Internal Factors"))
+        staerken = st.text_area("**" + ("Stärken (Strengths)" if language == "DE" else "Strengths") + "**", 
+                               placeholder=("Was sind unsere Stärken?\n• Fachkompetenz\n• Ressourcen\n• Erfahrung\n• Markenimage" if language == "DE" else "What are our strengths?\n• Expertise\n• Resources\n• Experience\n• Brand image"))
+        schwaechen = st.text_area("**" + ("Schwächen (Weaknesses)" if language == "DE" else "Weaknesses") + "**", 
+                                 placeholder=("Wo haben wir Verbesserungspotenzial?\n• Fehlende Ressourcen\n• Prozessineffizienzen\n• Wissenslücken" if language == "DE" else "Where do we have improvement potential?\n• Missing resources\n• Process inefficiencies\n• Knowledge gaps"))
+    
     with col2:
-        if st.button('Rolle anlegen') and new_role:
-            st.session_state.raci_roles.append(new_role)
-            st.experimental_rerun()
+        st.subheader("🌍 " + ("Externe Faktoren" if language == "DE" else "External Factors"))
+        chancen = st.text_area("**" + ("Chancen (Opportunities)" if language == "DE" else "Opportunities") + "**", 
+                              placeholder=("Welche Chancen bieten sich?\n• Markttrends\n• Technologische Entwicklungen\n• Partnerschaften" if language == "DE" else "What opportunities arise?\n• Market trends\n• Technological developments\n• Partnerships"))
+        risiken = st.text_area("**" + ("Risiken (Threats)" if language == "DE" else "Threats") + "**", 
+                              placeholder=("Welche Risiken sehen wir?\n• Wettbewerb\n• Marktveränderungen\n• Regulatorische Änderungen" if language == "DE" else "What risks do we see?\n• Competition\n• Market changes\n• Regulatory changes"))
 
-    st.subheader('Aufgabe mit Zuweisung')
-    with st.form('raci_task_form'):
-        task = st.text_input('Aufgabenbezeichnung')
-        assigns = {}
-        for r in st.session_state.raci_roles:
-            assigns[r] = st.selectbox(f'{r}', ['-', 'R', 'A', 'C', 'I'], key=f'r_{r}_{len(st.session_state.raci_tasks)}')
-        if st.form_submit_button('Zuweisen') and task:
-            st.session_state.raci_tasks.append({'aufgabe': task, 'zuweisungen': assigns})
-            st.experimental_rerun()
+    if st.button("📋 " + ("SWOT-Analyse erstellen" if language == "DE" else "Create SWOT Analysis")):
+        if staerken or schwaechen or chancen or risiken:
+            st.success("✅ " + ("SWOT-Analyse erfolgreich erstellt!" if language == "DE" else "SWOT analysis successfully created!"))
+            
+            # Visual SWOT Quadrant
+            create_swot_quadrant(staerken, schwaechen, chancen, risiken)
+            
+            # Strategic Recommendations
+            st.subheader("🎯 " + ("Strategische Implikationen" if language == "DE" else "Strategic Implications"))
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if staerken and chancen:
+                    st.info("**" + ("SO-Strategien (Stärken + Chancen):" if language == "DE" else "SO Strategies (Strengths + Opportunities):") + "** " + 
+                           ("Nutze Stärken, um Chancen zu ergreifen" if language == "DE" else "Use strengths to seize opportunities"))
+                if schwaechen and chancen:
+                    st.warning("**" + ("WO-Strategien (Schwächen + Chancen):" if language == "DE" else "WO Strategies (Weaknesses + Opportunities):") + "** " + 
+                              ("Überwinde Schwächen, um Chancen zu nutzen" if language == "DE" else "Overcome weaknesses to use opportunities"))
+            
+            with col2:
+                if staerken and risiken:
+                    st.success("**" + ("ST-Strategien (Stärken + Risiken):" if language == "DE" else "ST Strategies (Strengths + Threats):") + "** " + 
+                              ("Verwende Stärken, um Risiken abzuwehren" if language == "DE" else "Use strengths to counter threats"))
+                if schwaechen and risiken:
+                    st.error("**" + ("WT-Strategien (Schwächen + Risiken):" if language == "DE" else "WT Strategies (Weaknesses + Threats):") + "** " + 
+                            ("Minimiere Schwächen und vermeide Risiken" if language == "DE" else "Minimize weaknesses and avoid threats"))
+            
+            # Export Section
+            st.divider()
+            st.subheader("📤 " + ("Export" if language == "DE" else "Export"))
+            
+            swot_data = pd.DataFrame({
+                'Kategorie': ['Stärken', 'Schwächen', 'Chancen', 'Risiken'] if language == "DE" else ['Strengths', 'Weaknesses', 'Opportunities', 'Threats'],
+                'Inhalt': [staerken, schwaechen, chancen, risiken]
+            })
+            
+            col_exp1, col_exp2 = st.columns(2)
+            with col_exp1:
+                if st.button(get_text("export_pdf", language)):
+                    pdf_content = {
+                        "Stärken": staerken or "Keine Einträge",
+                        "Schwächen": schwaechen or "Keine Einträge", 
+                        "Chancen": chancen or "Keine Einträge",
+                        "Risiken": risiken or "Keine Einträge"
+                    }
+                    pdf_file = export_to_pdf(pdf_content, "SWOT Analyse")
+                    st.markdown(create_download_link(pdf_file.getvalue(), "swot_analysis.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
+            
+            with col_exp2:
+                if st.button(get_text("export_excel", language)):
+                    st.markdown(create_download_link(swot_data, "swot_analysis.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
+                    
+        else:
+            st.warning("⚠️ " + ("Bitte fülle mindestens ein Feld aus, um die Analyse zu erstellen." if language == "DE" else "Please fill in at least one field to create the analysis."))
 
-    if st.session_state.raci_tasks:
+# --- EISENHOWER MATRIX ---
+elif module == LANGUAGES[language]["modules"][3]:
+    st.title("⏳ " + ("Eisenhower-Matrix" if language == "DE" else "Eisenhower Matrix"))
+    
+    with st.expander("ℹ️ " + ("Über dieses Tool" if language == "DE" else "About this tool")):
+        st.write("""
+        **📋 Methodenbeschreibung:**
+        Die Eisenhower-Matrix hilft bei der Priorisierung von Aufgaben nach:
+        - **Dringlichkeit** (Zeitdruck) 
+        - **Wichtigkeit** (Auswirkung auf Ziele)
+        
+        **🎯 Die vier Quadranten:**
+        1. **🔴 Q1: Wichtig & Dringend** → Sofort selbst erledigen
+        2. **🟢 Q2: Wichtig & Nicht Dringend** → Terminieren und planen  
+        3. **🟡 Q3: Nicht Wichtig & Dringend** → Delegieren möglich
+        4. **⚫ Q4: Nicht Wichtig & Nicht Dringend** → Eliminieren oder später
+        
+        **📝 Vorgehen:**
+        1. Liste alle anstehenden Aufgaben auf
+        2. Bewerte jede Aufgabe nach Wichtigkeit und Dringlichkeit
+        3. Ordne die Aufgaben den Quadranten zu
+        4. Handle nach der Priorität: Q1 → Q2 → Q3 → Q4
+        """)
+    
+    # Session State für Aufgaben initialisieren
+    if 'aufgaben' not in st.session_state:
+        st.session_state.aufgaben = []
+    
+    # Neue Aufgabe hinzufügen
+    with st.form("neue_aufgabe"):
+        st.subheader("➕ " + ("Neue Aufgabe hinzufügen" if language == "DE" else "Add new task"))
+        aufgabe = st.text_input("Aufgabenbeschreibung" if language == "DE" else "Task description")
+        wichtigkeit = st.selectbox("Wichtigkeit" if language == "DE" else "Importance", 
+                                 ["Wichtig", "Nicht Wichtig"] if language == "DE" else ["Important", "Not Important"])
+        dringlichkeit = st.selectbox("Dringlichkeit" if language == "DE" else "Urgency", 
+                                   ["Dringend", "Nicht Dringend"] if language == "DE" else ["Urgent", "Not Urgent"])
+        
+        if st.form_submit_button("Aufgabe hinzufügen" if language == "DE" else "Add task"):
+            if aufgabe:
+                quadrant = f"Q{1 if wichtigkeit == 'Wichtig' and dringlichkeit == 'Dringend' else 2 if wichtigkeit == 'Wichtig' and dringlichkeit == 'Nicht Dringend' else 3 if wichtigkeit == 'Nicht Wichtig' and dringlichkeit == 'Dringend' else 4}"
+                st.session_state.aufgaben.append({
+                    "beschreibung": aufgabe,
+                    "wichtigkeit": wichtigkeit,
+                    "dringlichkeit": dringlichkeit,
+                    "quadrant": quadrant
+                })
+                st.success("✅ " + ("Aufgabe hinzugefügt!" if language == "DE" else "Task added!"))
+    
+    # Matrix anzeigen
+    if st.session_state.aufgaben:
+        st.subheader("📊 " + ("Deine Eisenhower-Matrix" if language == "DE" else "Your Eisenhower Matrix"))
+        create_eisenhower_matrix(st.session_state.aufgaben)
+        
+        # Export Section
+        st.divider()
+        st.subheader("📤 " + ("Export" if language == "DE" else "Export"))
+        
+        tasks_data = pd.DataFrame(st.session_state.aufgaben)
+        
+        col_exp1, col_exp2 = st.columns(2)
+        with col_exp1:
+            if st.button(get_text("export_pdf", language)):
+                pdf_content = {}
+                for task in st.session_state.aufgaben:
+                    pdf_content[task['beschreibung']] = f"Quadrant: {task['quadrant']}, Wichtigkeit: {task['wichtigkeit']}, Dringlichkeit: {task['dringlichkeit']}"
+                
+                pdf_file = export_to_pdf(pdf_content, "Eisenhower Matrix")
+                st.markdown(create_download_link(pdf_file.getvalue(), "eisenhower_matrix.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
+        
+        with col_exp2:
+            if st.button(get_text("export_excel", language)):
+                st.markdown(create_download_link(tasks_data, "eisenhower_matrix.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
+        
+        # Lösch-Button
+        if st.button("🗑️ " + ("Alle Aufgaben löschen" if language == "DE" else "Delete all tasks")):
+            st.session_state.aufgaben = []
+            st.rerun()
+    else:
+        st.info("ℹ️ " + ("Füge deine ersten Aufgaben hinzu, um die Matrix zu sehen." if language == "DE" else "Add your first tasks to see the matrix."))
+
+# --- RACI MATRIX ---  
+elif module == LANGUAGES[language]["modules"][4]:
+    st.title("👥 " + ("RACI-Matrix" if language == "DE" else "RACI Matrix"))
+    
+    with st.expander("ℹ️ " + ("Über dieses Tool" if language == "DE" else "About this tool")):
+        st.write("""
+        **📋 Methodenbeschreibung:**
+        Die RACI-Matrix klärt Verantwortlichkeiten in Projekten:
+        - **R = Responsible** → Führt die Arbeit aus (kann mehrere Personen)
+        - **A = Accountable** → Trägt die Verantwortung (nur eine Person pro Aufgabe)
+        - **C = Consulted** → Wird um Rat gefragt (zweiseitige Kommunikation)
+        - **I = Informed** → Wird über Ergebnisse informiert (einseitige Kommunikation)
+        
+        **🎯 Wann einsetzen?**
+        - Bei Projektstart zur Klärung von Rollen
+        - Bei Schnittstellenproblemen zwischen Abteilungen
+        - Für komplexe Projekte mit vielen Beteiligten
+        
+        **📝 Vorgehen:**
+        1. Definiere alle relevanten Aufgaben/Aktivitäten
+        2. Liste alle beteiligten Rollen/Personen auf
+        3. Weise für jede Aufgabe RACI-Zuordnungen zu
+        4. Überprüfe auf Konflikte (mehrere A's, keine R's, etc.)
+        """)
+    
+    # Session State für RACI initialisieren
+    if 'raci_aufgaben' not in st.session_state:
+        st.session_state.raci_aufgaben = []
+    if 'raci_rollen' not in st.session_state:
+        st.session_state.raci_rollen = ["Projektleiter", "Team-Mitglied"] if language == "DE" else ["Project Manager", "Team Member"]
+    
+    # Rollen verwalten
+    st.subheader("👥 " + ("Rollen definieren" if language == "DE" else "Define roles"))
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        neue_rolle = st.text_input("Neue Rolle hinzufügen" if language == "DE" else "Add new role")
+    
+    with col2:
+        if st.button("Rolle hinzufügen" if language == "DE" else "Add role") and neue_rolle:
+            st.session_state.raci_rollen.append(neue_rolle)
+            st.rerun()
+    
+    # Aufgaben verwalten
+    st.subheader("📋 " + ("Aufgaben definieren" if language == "DE" else "Define tasks"))
+    with st.form("neue_raci_aufgabe"):
+        aufgaben_beschreibung = st.text_input("Aufgabenbeschreibung" if language == "DE" else "Task description")
+        
+        # RACI Auswahl für jede Rolle
+        raci_zuweisungen = {}
+        for rolle in st.session_state.raci_rollen:
+            raci_zuweisungen[rolle] = st.selectbox(
+                f"RACI für {rolle}",
+                ["-", "R", "A", "C", "I"],
+                key=f"raci_{rolle}"
+            )
+        
+        if st.form_submit_button("Aufgabe hinzufügen" if language == "DE" else "Add task"):
+            if aufgaben_beschreibung:
+                st.session_state.raci_aufgaben.append({
+                    "beschreibung": aufgaben_beschreibung,
+                    "zuweisungen": raci_zuweisungen.copy()
+                })
+                st.success("✅ " + ("Aufgabe hinzugefügt!" if language == "DE" else "Task added!"))
+    
+    # RACI Matrix anzeigen
+    if st.session_state.raci_aufgaben:
+        st.subheader("📊 " + ("RACI-Matrix" if language == "DE" else "RACI Matrix"))
+        
+        # Tabellenkopf
+        header = "| " + ("Aufgabe" if language == "DE" else "Task") + " | " + " | ".join(st.session_state.raci_rollen) + " |"
+        separator = "|" + "|".join(["---"] * (len(st.session_state.raci_rollen) + 1)) + "|"
+        
+        # Tabellenzeilen
         rows = []
-        for t in st.session_state.raci_tasks:
-            row = {'Aufgabe': t['aufgabe']}
-            row.update(t['zuweisungen'])
-            rows.append(row)
-        df = pd.DataFrame(rows)
-        st.dataframe(df)
+        for aufgabe in st.session_state.raci_aufgaben:
+            zuweisungen = " | ".join([aufgabe["zuweisungen"][rolle] for rolle in st.session_state.raci_rollen])
+            rows.append(f"| {aufgabe['beschreibung']} | {zuweisungen} |")
+        
+        # Tabelle anzeigen
+        markdown_table = "\n".join([header, separator] + rows)
+        st.markdown(markdown_table)
+        
+        # Legende
+        st.markdown("""
+        **""" + ("Legende:" if language == "DE" else "Legend:") + """**
+        - **R** = """ + ("Responsible (Verantwortlich)" if language == "DE" else "Responsible") + """
+        - **A** = """ + ("Accountable (Rechenschaftspflichtig)" if language == "DE" else "Accountable") + """
+        - **C** = """ + ("Consulted (Konsultiert)" if language == "DE" else "Consulted") + """
+        - **I** = """ + ("Informed (Informiert)" if language == "DE" else "Informed") + """
+        """)
+        
+        # Export Section
+        st.divider()
+        st.subheader("📤 " + ("Export" if language == "DE" else "Export"))
+        
+        # Prepare data for export
+        export_data = []
+        for aufgabe in st.session_state.raci_aufgaben:
+            row = {"Aufgabe": aufgabe["beschreibung"]}
+            for rolle in st.session_state.raci_rollen:
+                row[rolle] = aufgabe["zuweisungen"][rolle]
+            export_data.append(row)
+        
+        raci_df = pd.DataFrame(export_data)
+        
+        col_exp1, col_exp2 = st.columns(2)
+        with col_exp1:
+            if st.button(get_text("export_pdf", language)):
+                pdf_content = {}
+                for aufgabe in st.session_state.raci_aufgaben:
+                    roles_text = ", ".join([f"{role}: {aufgabe['zuweisungen'][role]}" for role in st.session_state.raci_rollen])
+                    pdf_content[aufgabe['beschreibung']] = roles_text
+                
+                pdf_file = export_to_pdf(pdf_content, "RACI Matrix")
+                st.markdown(create_download_link(pdf_file.getvalue(), "raci_matrix.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
+        
+        with col_exp2:
+            if st.button(get_text("export_excel", language)):
+                st.markdown(create_download_link(raci_df, "raci_matrix.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
+        
+        if st.button("🗑️ " + ("RACI-Matrix löschen" if language == "DE" else "Delete RACI Matrix")):
+            st.session_state.raci_aufgaben = []
+            st.rerun()
+    else:
+        st.info("ℹ️ " + ("Definiere Rollen und Aufgaben, um die RACI-Matrix zu erstellen." if language == "DE" else "Define roles and tasks to create the RACI matrix."))
 
-        # Export
-        excel = to_excel_bytes({'RACI': df})
-        st.download_button(L['download_excel'], data=excel, file_name='raci.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+# --- BALANCED SCORECARD ---
+elif module == LANGUAGES[language]["modules"][5]:
+    st.title("⚖️ " + ("Balanced Scorecard" if language == "DE" else "Balanced Scorecard"))
+    
+    with st.expander("ℹ️ " + ("Über dieses Tool" if language == "DE" else "About this tool")):
+        st.write("""
+        **📋 Methodenbeschreibung:**
+        Die Balanced Scorecard betrachtet strategische Ziele aus vier Perspektiven:
+        1. **💰 Finanzen** → Wirtschaftliche Erfolgsziele
+        2. **👥 Kunden** → Kundenorientierte Ziele  
+        3. **⚙️ Interne Prozesse** → Prozessoptimierung und Effizienz
+        4. **📚 Lernen & Entwicklung** → Mitarbeiterentwicklung und Innovation
+        
+        **🎯 Wann einsetzen?**
+        - Für strategische Unternehmenssteuerung
+        - Bei der Umsetzung von Unternehmensvisionen
+        - Für die Leistungsmessung auf mehreren Ebenen
+        - Bei der Verbindung operativer und strategischer Ziele
+        
+        **📝 Vorgehen:**
+        1. Definiere Vision und Strategie
+        2. Leite Ziele für jede Perspektive ab
+        3. Definiere Kennzahlen und Zielwerte
+        4. Plane konkrete Maßnahmen
+        5. Überwache und passe regelmäßig an
+        """)
+    
+    # Session State für BSC initialisieren
+    if 'bsc_ziele' not in st.session_state:
+        st.session_state.bsc_ziele = []
+    
+    # Neue Ziele hinzufügen
+    with st.form("neues_bsc_ziel"):
+        st.subheader("🎯 " + ("Neues Ziel hinzufügen" if language == "DE" else "Add new objective"))
+        
+        perspektive = st.selectbox(
+            "Perspektive" if language == "DE" else "Perspective",
+            ["Finanzen", "Kunden", "Interne Prozesse", "Lernen & Entwicklung"] if language == "DE" 
+            else ["Financial", "Customer", "Internal Processes", "Learning & Growth"]
+        )
+        
+        ziel = st.text_input("Strategisches Ziel" if language == "DE" else "Strategic objective")
+        kennzahl = st.text_input("Kennzahl / Messgröße" if language == "DE" else "KPI / Metric")
+        zielwert = st.text_input("Zielwert" if language == "DE" else "Target value")
+        massnahmen = st.text_area("Erforderliche Maßnahmen" if language == "DE" else "Required measures")
+        
+        if st.form_submit_button("Ziel hinzufügen" if language == "DE" else "Add objective"):
+            if ziel and kennzahl:
+                st.session_state.bsc_ziele.append({
+                    "perspektive": perspektive,
+                    "ziel": ziel,
+                    "kennzahl": kennzahl,
+                    "zielwert": zielwert,
+                    "massnahmen": massnahmen
+                })
+                st.success("✅ " + ("Ziel hinzugefügt!" if language == "DE" else "Objective added!"))
+    
+    # Balanced Scorecard anzeigen
+    if st.session_state.bsc_ziele:
+        st.subheader("📈 " + ("Deine Balanced Scorecard" if language == "DE" else "Your Balanced Scorecard"))
+        
+        perspektiven = {
+            "Finanzen": {"emoji": "💰", "color": "#e9ecef"},
+            "Kunden": {"emoji": "👥", "color": "#d8f3dc"}, 
+            "Interne Prozesse": {"emoji": "⚙️", "color": "#fff3cd"},
+            "Lernen & Entwicklung": {"emoji": "📚", "color": "#cce7ff"}
+        } if language == "DE" else {
+            "Financial": {"emoji": "💰", "color": "#e9ecef"},
+            "Customer": {"emoji": "👥", "color": "#d8f3dc"},
+            "Internal Processes": {"emoji": "⚙️", "color": "#fff3cd"},
+            "Learning & Growth": {"emoji": "📚", "color": "#cce7ff"}
+        }
+        
+        for perspektive, info in perspektiven.items():
+            perspektive_ziele = [z for z in st.session_state.bsc_ziele if z["perspektive"] == perspektive]
+            
+            if perspektive_ziele:
+                st.markdown(f"""
+                <div style='background-color: {info['color']}; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #495057;'>
+                    <h4>{info['emoji']} {perspektive}</h4>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                for ziel in perspektive_ziele:
+                    with st.expander(f"🎯 {ziel['ziel']}"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write(f"**" + ("Kennzahl:" if language == "DE" else "KPI:") + f"** {ziel['kennzahl']}")
+                            st.write(f"**" + ("Zielwert:" if language == "DE" else "Target value:") + f"** {ziel['zielwert']}")
+                        with col2:
+                            st.write(f"**" + ("Maßnahmen:" if language == "DE" else "Measures:") + f"** {ziel['massnahmen']}")
+        
+        # Zusammenfassung
+        st.subheader("📊 " + ("Zusammenfassung" if language == "DE" else "Summary"))
+        col1, col2, col3, col4 = st.columns(4)
+        
+        for i, (perspektive, info) in enumerate(perspektiven.items()):
+            anzahl = len([z for z in st.session_state.bsc_ziele if z["perspektive"] == perspektive])
+            with [col1, col2, col3, col4][i]:
+                st.metric(f"{info['emoji']} {perspektive}", anzahl)
+        
+        # Export Section
+        st.divider()
+        st.subheader("📤 " + ("Export" if language == "DE" else "Export"))
+        
+        bsc_data = pd.DataFrame(st.session_state.bsc_ziele)
+        
+        col_exp1, col_exp2 = st.columns(2)
+        with col_exp1:
+            if st.button(get_text("export_pdf", language)):
+                pdf_content = {}
+                for ziel in st.session_state.bsc_ziele:
+                    ziel_text = f"Kennzahl: {ziel['kennzahl']}, Zielwert: {ziel['zielwert']}, Maßnahmen: {ziel['massnahmen']}"
+                    pdf_content[f"{ziel['perspektive']} - {ziel['ziel']}"] = ziel_text
+                
+                pdf_file = export_to_pdf(pdf_content, "Balanced Scorecard")
+                st.markdown(create_download_link(pdf_file.getvalue(), "balanced_scorecard.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
+        
+        with col_exp2:
+            if st.button(get_text("export_excel", language)):
+                st.markdown(create_download_link(bsc_data, "balanced_scorecard.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
+        
+        if st.button("🗑️ " + ("Alle Ziele löschen" if language == "DE" else "Delete all objectives")):
+            st.session_state.bsc_ziele = []
+            st.rerun()
+    else:
+        st.info("ℹ️ " + ("Füge strategische Ziele hinzu, um deine Balanced Scorecard zu erstellen." if language == "DE" else "Add strategic objectives to create your Balanced Scorecard."))
 
-    with st.expander('Hinweis'):
-        st.write('RACI hilft, Klarheit bei Rollen zu schaffen. Nutze es in Kickoff Meeting, wenn Aufgaben klar verteilt werden.')
+# --- GLOBAL EXPORT IN SIDEBAR ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("📤 " + ("Globale Export-Funktionen" if language == "DE" else "Global Export Features"))
 
-# -------------------------
-# Module: Balanced Scorecard
-# -------------------------
-elif module.startswith('⚖️'):
-    st.title('⚖️ Balanced Scorecard')
-    if 'bsc' not in st.session_state:
-        st.session_state.bsc = []
+# Placeholder for global export functionality
+st.sidebar.info("ℹ️ " + ("Export-Funktionen sind in den einzelnen Modulen verfügbar." if language == "DE" else "Export features are available in individual modules."))
 
-    with st.form('bsc_form'):
-        pers = st.selectbox('Perspektive', ['Finanzen', 'Kunden', 'Interne Prozesse', 'Lernen & Entwicklung'])
-        ziel = st.text_input('Ziel')
-        kpi = st.text_input('KPI')
-        zielwert = st.text_input('Zielwert')
-        mass = st.text_area('Maßnahme')
-        if st.form_submit_button('Ziel anlegen') and ziel and kpi:
-            st.session_state.bsc.append({'perspektive': pers, 'ziel': ziel, 'kpi': kpi, 'zielwert': zielwert, 'massnahme': mass})
-            st.experimental_rerun()
-
-    if st.session_state.bsc:
-        df = pd.DataFrame(st.session_state.bsc)
-        st.dataframe(df)
-        # Zusammenfassung als Balken
-        counts = df['perspektive'].value_counts()
-        fig, ax = plt.subplots(figsize=(6,3))
-        counts.plot.bar(ax=ax)
-        ax.set_ylabel('Anzahl Ziele')
-        st.pyplot(fig)
-
-        excel = to_excel_bytes({'BSC': df})
-        st.download_button(L['download_excel'], data=excel, file_name='bsc.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        pdf = figs_to_pdf_bytes([fig])
-        st.download_button(L['download_pdf'], data=pdf, file_name='bsc.pdf', mime='application/pdf')
-
-    with st.expander('Vorgehen'):
-        st.write('''
-- Formuliere für jede Perspektive 2–3 klare Ziele.
-- Lege KPI fest, die messbar sind.
-- Definiere Maßnahme, die Ziel erreicht.
-- Review zyklisch, z. B. quartal.
-''')
-
-# -------------------------
-# Export gesamter Bericht (alle aktiven Module)
-# -------------------------
-
-# Sammler für alle Daten (einfacher Export)
-all_sheets = {}
-if 'e_tasks' in st.session_state and st.session_state.e_tasks:
-    all_sheets['Eisenhower'] = pd.DataFrame(st.session_state.e_tasks)
-if 'raci_tasks' in st.session_state and st.session_state.raci_tasks:
-    rows = []
-    for t in st.session_state.raci_tasks:
-        row = {'Aufgabe': t['aufgabe']}
-        row.update(t['zuweisungen'])
-        rows.append(row)
-    all_sheets['RACI'] = pd.DataFrame(rows)
-if 'bsc' in st.session_state and st.session_state.bsc:
-    all_sheets['BSC'] = pd.DataFrame(st.session_state.bsc)
-# SWOT kann man bei Bedarf hinzufügen hier, via same logic
-
-if all_sheets:
-    st.sidebar.divider()
-    st.sidebar.subheader('Export')
-    excel_all = to_excel_bytes(all_sheets)
-    st.sidebar.download_button(L['download_excel'], data=excel_all, file_name='decision_compass_export.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    # PDF: wir bauen einfache PDF mit Plots falls vorhanden
-    figs = []
-    # If SWOT plot present in current session show add
-    # For demo: add empty
-    if figs:
-        pdf_all = figs_to_pdf_bytes(figs)
-        st.sidebar.download_button(L['download_pdf'], data=pdf_all, file_name='decision_compass_report.pdf', mime='application/pdf')
-
-# Ende Datei
+# --- FOOTER ---
+st.sidebar.markdown("---")
+st.sidebar.markdown("**🧭 Decision Compass**  \n" + 
+                   ("Ein umfassendes Tool für strategische Entscheidungsfindung" if language == "DE" else "A comprehensive tool for strategic decision making"))
