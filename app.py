@@ -3,10 +3,6 @@ import time
 import pandas as pd
 import json
 import io
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
 import base64
 
 # --- Page config ---
@@ -52,6 +48,7 @@ def get_text(key, lang):
         # Common
         "export_pdf": {"DE": "📄 Als PDF exportieren", "EN": "📄 Export as PDF"},
         "export_excel": {"DE": "📊 Als Excel exportieren", "EN": "📊 Export as Excel"},
+        "export_csv": {"DE": "📝 Als CSV exportieren", "EN": "📝 Export as CSV"},
         "analysis_complete": {"DE": "✅ Analyse abgeschlossen!", "EN": "✅ Analysis complete!"},
         # Task Analysis
         "task_analysis_title": {"DE": "🔎 Aufgaben-Analyse", "EN": "🔎 Task Analysis"},
@@ -59,7 +56,6 @@ def get_text(key, lang):
             "DE": "Bestimme den Typ deiner Aufgabe: disjunktiv, konjunktiv oder additiv",
             "EN": "Determine your task type: disjunctive, conjunctive or additive"
         },
-        # Add more translations as needed...
     }
     return translations.get(key, {}).get(lang, key)
 
@@ -94,7 +90,7 @@ def create_download_link(data, filename, text):
     """Create a download link for data"""
     if isinstance(data, pd.DataFrame):
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
             data.to_excel(writer, index=False, sheet_name='Results')
         data = output.getvalue()
     
@@ -102,29 +98,11 @@ def create_download_link(data, filename, text):
     href = f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}">{text}</a>'
     return href
 
-def export_to_pdf(content_dict, title):
-    """Export content to PDF"""
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    styles = getSampleStyleSheet()
-    story = []
-    
-    # Title
-    title_para = Paragraph(f"<b>{title}</b>", styles['Title'])
-    story.append(title_para)
-    story.append(Spacer(1, 12))
-    
-    # Add content
-    for section, content in content_dict.items():
-        section_para = Paragraph(f"<b>{section}</b>", styles['Heading2'])
-        story.append(section_para)
-        content_para = Paragraph(str(content), styles['Normal'])
-        story.append(content_para)
-        story.append(Spacer(1, 12))
-    
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
+def export_to_csv(data, filename):
+    """Export data to CSV"""
+    if isinstance(data, pd.DataFrame):
+        return data.to_csv(index=False)
+    return data
 
 # --- Visualization Functions ---
 def create_swot_quadrant(strengths, weaknesses, opportunities, threats):
@@ -411,18 +389,18 @@ elif module == LANGUAGES[language]["modules"][1]:
             col_exp1, col_exp2 = st.columns(2)
             
             with col_exp1:
-                if st.button(get_text("export_pdf", language)):
-                    pdf_content = {
-                        "Punktestände": str(punkte),
-                        "Prozentuale Verteilung": str(prozentuale_verteilung),
-                        "Empfehlung": bericht
-                    }
-                    pdf_file = export_to_pdf(pdf_content, "Aufgaben-Analyse Ergebnisse")
-                    st.markdown(create_download_link(pdf_file.getvalue(), "task_analysis.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
-            
-            with col_exp2:
                 if st.button(get_text("export_excel", language)):
                     st.markdown(create_download_link(export_data, "task_analysis.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
+            
+            with col_exp2:
+                if st.button(get_text("export_csv", language)):
+                    csv_data = export_to_csv(export_data, "task_analysis.csv")
+                    st.download_button(
+                        label="📝 CSV herunterladen",
+                        data=csv_data,
+                        file_name="task_analysis.csv",
+                        mime="text/csv"
+                    )
 
 # --- SWOT ANALYSIS ---
 elif module == LANGUAGES[language]["modules"][2]:
@@ -506,19 +484,18 @@ elif module == LANGUAGES[language]["modules"][2]:
             
             col_exp1, col_exp2 = st.columns(2)
             with col_exp1:
-                if st.button(get_text("export_pdf", language)):
-                    pdf_content = {
-                        "Stärken": staerken or "Keine Einträge",
-                        "Schwächen": schwaechen or "Keine Einträge", 
-                        "Chancen": chancen or "Keine Einträge",
-                        "Risiken": risiken or "Keine Einträge"
-                    }
-                    pdf_file = export_to_pdf(pdf_content, "SWOT Analyse")
-                    st.markdown(create_download_link(pdf_file.getvalue(), "swot_analysis.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
-            
-            with col_exp2:
                 if st.button(get_text("export_excel", language)):
                     st.markdown(create_download_link(swot_data, "swot_analysis.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
+            
+            with col_exp2:
+                if st.button(get_text("export_csv", language)):
+                    csv_data = export_to_csv(swot_data, "swot_analysis.csv")
+                    st.download_button(
+                        label="📝 CSV herunterladen",
+                        data=csv_data,
+                        file_name="swot_analysis.csv",
+                        mime="text/csv"
+                    )
                     
         else:
             st.warning("⚠️ " + ("Bitte fülle mindestens ein Feld aus, um die Analyse zu erstellen." if language == "DE" else "Please fill in at least one field to create the analysis."))
@@ -584,17 +561,18 @@ elif module == LANGUAGES[language]["modules"][3]:
         
         col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
-            if st.button(get_text("export_pdf", language)):
-                pdf_content = {}
-                for task in st.session_state.aufgaben:
-                    pdf_content[task['beschreibung']] = f"Quadrant: {task['quadrant']}, Wichtigkeit: {task['wichtigkeit']}, Dringlichkeit: {task['dringlichkeit']}"
-                
-                pdf_file = export_to_pdf(pdf_content, "Eisenhower Matrix")
-                st.markdown(create_download_link(pdf_file.getvalue(), "eisenhower_matrix.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
-        
-        with col_exp2:
             if st.button(get_text("export_excel", language)):
                 st.markdown(create_download_link(tasks_data, "eisenhower_matrix.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
+        
+        with col_exp2:
+            if st.button(get_text("export_csv", language)):
+                csv_data = export_to_csv(tasks_data, "eisenhower_matrix.csv")
+                st.download_button(
+                    label="📝 CSV herunterladen",
+                    data=csv_data,
+                    file_name="eisenhower_matrix.csv",
+                    mime="text/csv"
+                )
         
         # Lösch-Button
         if st.button("🗑️ " + ("Alle Aufgaben löschen" if language == "DE" else "Delete all tasks")):
@@ -711,18 +689,18 @@ elif module == LANGUAGES[language]["modules"][4]:
         
         col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
-            if st.button(get_text("export_pdf", language)):
-                pdf_content = {}
-                for aufgabe in st.session_state.raci_aufgaben:
-                    roles_text = ", ".join([f"{role}: {aufgabe['zuweisungen'][role]}" for role in st.session_state.raci_rollen])
-                    pdf_content[aufgabe['beschreibung']] = roles_text
-                
-                pdf_file = export_to_pdf(pdf_content, "RACI Matrix")
-                st.markdown(create_download_link(pdf_file.getvalue(), "raci_matrix.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
-        
-        with col_exp2:
             if st.button(get_text("export_excel", language)):
                 st.markdown(create_download_link(raci_df, "raci_matrix.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
+        
+        with col_exp2:
+            if st.button(get_text("export_csv", language)):
+                csv_data = export_to_csv(raci_df, "raci_matrix.csv")
+                st.download_button(
+                    label="📝 CSV herunterladen",
+                    data=csv_data,
+                    file_name="raci_matrix.csv",
+                    mime="text/csv"
+                )
         
         if st.button("🗑️ " + ("RACI-Matrix löschen" if language == "DE" else "Delete RACI Matrix")):
             st.session_state.raci_aufgaben = []
@@ -839,18 +817,18 @@ elif module == LANGUAGES[language]["modules"][5]:
         
         col_exp1, col_exp2 = st.columns(2)
         with col_exp1:
-            if st.button(get_text("export_pdf", language)):
-                pdf_content = {}
-                for ziel in st.session_state.bsc_ziele:
-                    ziel_text = f"Kennzahl: {ziel['kennzahl']}, Zielwert: {ziel['zielwert']}, Maßnahmen: {ziel['massnahmen']}"
-                    pdf_content[f"{ziel['perspektive']} - {ziel['ziel']}"] = ziel_text
-                
-                pdf_file = export_to_pdf(pdf_content, "Balanced Scorecard")
-                st.markdown(create_download_link(pdf_file.getvalue(), "balanced_scorecard.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
-        
-        with col_exp2:
             if st.button(get_text("export_excel", language)):
                 st.markdown(create_download_link(bsc_data, "balanced_scorecard.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
+        
+        with col_exp2:
+            if st.button(get_text("export_csv", language)):
+                csv_data = export_to_csv(bsc_data, "balanced_scorecard.csv")
+                st.download_button(
+                    label="📝 CSV herunterladen",
+                    data=csv_data,
+                    file_name="balanced_scorecard.csv",
+                    mime="text/csv"
+                )
         
         if st.button("🗑️ " + ("Alle Ziele löschen" if language == "DE" else "Delete all objectives")):
             st.session_state.bsc_ziele = []
