@@ -4,6 +4,11 @@ import pandas as pd
 import json
 import io
 import base64
+from reportlab.lib.pagesizes import A4, letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from reportlab.pdfgen import canvas
 
 # --- Page config ---
 st.set_page_config(page_title="Decision Compass", layout="wide")
@@ -50,12 +55,6 @@ def get_text(key, lang):
         "export_excel": {"DE": "📊 Als Excel exportieren", "EN": "📊 Export as Excel"},
         "export_csv": {"DE": "📝 Als CSV exportieren", "EN": "📝 Export as CSV"},
         "analysis_complete": {"DE": "✅ Analyse abgeschlossen!", "EN": "✅ Analysis complete!"},
-        # Task Analysis
-        "task_analysis_title": {"DE": "🔎 Aufgaben-Analyse", "EN": "🔎 Task Analysis"},
-        "task_analysis_desc": {
-            "DE": "Bestimme den Typ deiner Aufgabe: disjunktiv, konjunktiv oder additiv",
-            "EN": "Determine your task type: disjunctive, conjunctive or additive"
-        },
     }
     return translations.get(key, {}).get(lang, key)
 
@@ -90,12 +89,45 @@ def create_download_link(data, filename, text):
     """Create a download link for data"""
     if isinstance(data, pd.DataFrame):
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             data.to_excel(writer, index=False, sheet_name='Results')
         data = output.getvalue()
     
     b64 = base64.b64encode(data).decode()
     href = f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}">{text}</a>'
+    return href
+
+def export_to_pdf(content_dict, title):
+    """Export content to PDF"""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    # Title
+    title_para = Paragraph(f"<b>{title}</b>", styles['Title'])
+    story.append(title_para)
+    story.append(Spacer(1, 12))
+    
+    # Add content
+    for section, content in content_dict.items():
+        section_para = Paragraph(f"<b>{section}</b>", styles['Heading2'])
+        story.append(section_para)
+        if isinstance(content, str):
+            content_para = Paragraph(content.replace('\n', '<br/>'), styles['Normal'])
+        else:
+            content_para = Paragraph(str(content), styles['Normal'])
+        story.append(content_para)
+        story.append(Spacer(1, 12))
+    
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+def create_pdf_download_button(pdf_data, filename, button_text):
+    """Create a PDF download button"""
+    b64 = base64.b64encode(pdf_data.getvalue()).decode()
+    href = f'<a href="data:application/pdf;base64,{b64}" download="{filename}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 5px;">{button_text}</a>'
     return href
 
 def export_to_csv(data, filename):
@@ -386,13 +418,23 @@ elif module == LANGUAGES[language]["modules"][1]:
             # Export Buttons
             st.divider()
             st.subheader("📤 " + ("Export" if language == "DE" else "Export"))
-            col_exp1, col_exp2 = st.columns(2)
+            col_exp1, col_exp2, col_exp3 = st.columns(3)
             
             with col_exp1:
+                if st.button(get_text("export_pdf", language)):
+                    pdf_content = {
+                        "Punktestände": f"Disjunktiv: {punkte['disjunktiv']} Punkte\nKonjunktiv: {punkte['konjunktiv']} Punkte\nAdditiv: {punkte['additiv']} Punkte",
+                        "Prozentuale Verteilung": f"Disjunktiv: {prozentuale_verteilung['disjunktiv']}%\nKonjunktiv: {prozentuale_verteilung['konjunktiv']}%\nAdditiv: {prozentuale_verteilung['additiv']}%",
+                        "Empfehlung": bericht
+                    }
+                    pdf_file = export_to_pdf(pdf_content, "Aufgaben-Analyse Ergebnisse")
+                    st.markdown(create_pdf_download_button(pdf_file, "task_analysis.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
+            
+            with col_exp2:
                 if st.button(get_text("export_excel", language)):
                     st.markdown(create_download_link(export_data, "task_analysis.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
             
-            with col_exp2:
+            with col_exp3:
                 if st.button(get_text("export_csv", language)):
                     csv_data = export_to_csv(export_data, "task_analysis.csv")
                     st.download_button(
@@ -482,12 +524,23 @@ elif module == LANGUAGES[language]["modules"][2]:
                 'Inhalt': [staerken, schwaechen, chancen, risiken]
             })
             
-            col_exp1, col_exp2 = st.columns(2)
+            col_exp1, col_exp2, col_exp3 = st.columns(3)
             with col_exp1:
+                if st.button(get_text("export_pdf", language)):
+                    pdf_content = {
+                        "Stärken": staerken or "Keine Einträge",
+                        "Schwächen": schwaechen or "Keine Einträge", 
+                        "Chancen": chancen or "Keine Einträge",
+                        "Risiken": risiken or "Keine Einträge"
+                    }
+                    pdf_file = export_to_pdf(pdf_content, "SWOT Analyse")
+                    st.markdown(create_pdf_download_button(pdf_file, "swot_analysis.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
+            
+            with col_exp2:
                 if st.button(get_text("export_excel", language)):
                     st.markdown(create_download_link(swot_data, "swot_analysis.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
             
-            with col_exp2:
+            with col_exp3:
                 if st.button(get_text("export_csv", language)):
                     csv_data = export_to_csv(swot_data, "swot_analysis.csv")
                     st.download_button(
@@ -559,12 +612,21 @@ elif module == LANGUAGES[language]["modules"][3]:
         
         tasks_data = pd.DataFrame(st.session_state.aufgaben)
         
-        col_exp1, col_exp2 = st.columns(2)
+        col_exp1, col_exp2, col_exp3 = st.columns(3)
         with col_exp1:
+            if st.button(get_text("export_pdf", language)):
+                pdf_content = {}
+                for task in st.session_state.aufgaben:
+                    pdf_content[task['beschreibung']] = f"Quadrant: {task['quadrant']}, Wichtigkeit: {task['wichtigkeit']}, Dringlichkeit: {task['dringlichkeit']}"
+                
+                pdf_file = export_to_pdf(pdf_content, "Eisenhower Matrix")
+                st.markdown(create_pdf_download_button(pdf_file, "eisenhower_matrix.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
+        
+        with col_exp2:
             if st.button(get_text("export_excel", language)):
                 st.markdown(create_download_link(tasks_data, "eisenhower_matrix.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
         
-        with col_exp2:
+        with col_exp3:
             if st.button(get_text("export_csv", language)):
                 csv_data = export_to_csv(tasks_data, "eisenhower_matrix.csv")
                 st.download_button(
@@ -687,12 +749,22 @@ elif module == LANGUAGES[language]["modules"][4]:
         
         raci_df = pd.DataFrame(export_data)
         
-        col_exp1, col_exp2 = st.columns(2)
+        col_exp1, col_exp2, col_exp3 = st.columns(3)
         with col_exp1:
+            if st.button(get_text("export_pdf", language)):
+                pdf_content = {}
+                for aufgabe in st.session_state.raci_aufgaben:
+                    roles_text = ", ".join([f"{role}: {aufgabe['zuweisungen'][role]}" for role in st.session_state.raci_rollen])
+                    pdf_content[aufgabe['beschreibung']] = roles_text
+                
+                pdf_file = export_to_pdf(pdf_content, "RACI Matrix")
+                st.markdown(create_pdf_download_button(pdf_file, "raci_matrix.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
+        
+        with col_exp2:
             if st.button(get_text("export_excel", language)):
                 st.markdown(create_download_link(raci_df, "raci_matrix.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
         
-        with col_exp2:
+        with col_exp3:
             if st.button(get_text("export_csv", language)):
                 csv_data = export_to_csv(raci_df, "raci_matrix.csv")
                 st.download_button(
@@ -815,12 +887,22 @@ elif module == LANGUAGES[language]["modules"][5]:
         
         bsc_data = pd.DataFrame(st.session_state.bsc_ziele)
         
-        col_exp1, col_exp2 = st.columns(2)
+        col_exp1, col_exp2, col_exp3 = st.columns(3)
         with col_exp1:
+            if st.button(get_text("export_pdf", language)):
+                pdf_content = {}
+                for ziel in st.session_state.bsc_ziele:
+                    ziel_text = f"Kennzahl: {ziel['kennzahl']}, Zielwert: {ziel['zielwert']}, Maßnahmen: {ziel['massnahmen']}"
+                    pdf_content[f"{ziel['perspektive']} - {ziel['ziel']}"] = ziel_text
+                
+                pdf_file = export_to_pdf(pdf_content, "Balanced Scorecard")
+                st.markdown(create_pdf_download_button(pdf_file, "balanced_scorecard.pdf", "📄 PDF herunterladen"), unsafe_allow_html=True)
+        
+        with col_exp2:
             if st.button(get_text("export_excel", language)):
                 st.markdown(create_download_link(bsc_data, "balanced_scorecard.xlsx", "📊 Excel herunterladen"), unsafe_allow_html=True)
         
-        with col_exp2:
+        with col_exp3:
             if st.button(get_text("export_csv", language)):
                 csv_data = export_to_csv(bsc_data, "balanced_scorecard.csv")
                 st.download_button(
